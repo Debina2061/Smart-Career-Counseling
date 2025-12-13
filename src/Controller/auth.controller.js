@@ -1,11 +1,14 @@
-import { User } from "../Model/user.model";
+import { User } from "../Model/user.model.js";
 import bcrypt from "bcrypt";
-import generateToken from "../utils/generateToken.js";
+import {generateToken} from "../utils/generateToken.js";
 import { Decryption, Encryption } from "../utils/encrypt.js";
-
-
+import crypto from "crypto"
+import { envConfig } from "../Config/envConfig.js";
+import { LoginVerify } from "../Model/loginVerify.model.js";
+import { SendMail } from "../utils/nodemailer.js";
+import { verifyEmail } from "../utils/templates/loginVerifyMail.js";
 export const SignUp = async (req,res)=>{
-    const {name,email,password} = req.body;
+    const { name,email,password } = req.body;
     if(!name || !email || !password){
         return res.status(400).json({
             message:"User must be provided all fields for sign up"
@@ -17,9 +20,9 @@ export const SignUp = async (req,res)=>{
             message:"Please provide a valid email address"
         });
     };
-    const existingUser = await User.findOne({email:email});
+    const existingUser = await User.findOne({email:email}).select("-password");
     if(existingUser){
-        res.status(409).json({
+        return res.status(401).json({
             message:"User with this email already exists"
         });
     };
@@ -32,12 +35,11 @@ export const SignUp = async (req,res)=>{
         ,authProvider:"local"
     });
     return res.status(201).json({
-        message:"User created successfully",
-        user:newUser.populate("-password")
+        message:"User created successfully"
     });
 }
 
-export const Login = async (req,res)=>{
+export const LoginRequest = async (req,res)=>{
     const {email,password} = req.body;
     if(!email || !password){
         return res.status(400).json({
@@ -56,14 +58,36 @@ export const Login = async (req,res)=>{
             message:"Invalid password"
         });
     }
-    const token = generateToken(existingUser);
 
+    let token = crypto.randomBytes(64).toString("hex");
+    await LoginVerify.create({
+        email,token
+    });
+    let verifyLink = `${envConfig.backendUrl}/auth/verify-token?email=${email}&token=${token}`;
+    const htmlContent = verifyEmail(email,verifyLink);
+    SendMail({email:email,subject:"Verify Login User",html:htmlContent});
+    // res.redirect(verifyLink);
     return res.status(200).json({
-        message:"User signed in successfully",
-        user:existingUser.populate("-password"),
-        token
+        messsage : "Please check your email to verify you login",
+        token : token
     });
 };
+
+export const loginVerify = async (req,res)=>{
+    const {token,email} = req.query;
+    const tokenResponse = await LoginVerify.findOne({email:email,token:token});
+    if(!tokenResponse){
+        return res.status(401).json({message:"verification failed"});
+    }
+    
+    const userInfo = await User.findOne({email:tokenResponse?.email}).select("-password");
+    console.log(userInfo)
+    generateToken(userInfo,res);
+    return res.status(200).json({
+        message:"User signed in successfully",
+        user:userInfo?.user
+        });
+}
 
 export const SignOut = async (req,res)=>{
     res.clearCookie("jwt");
@@ -73,13 +97,7 @@ export const SignOut = async (req,res)=>{
 };
 
 export const Profile = async (req,res)=>{
-    const {_id : userId} = req.user;
-    const user = await User.findById(userId).populate("-password");
-    if(!user){
-        return res.status(404).json({
-            message:"User not found"
-        });
-    }
+    const user = req.user;
     return res.status(200).json({
         message:"User profile fetched successfully",
         user
@@ -113,7 +131,6 @@ export const ChangePassword = async (req,res)=>{
         message : "Password changes successfully"
     });
 }
-
 
 export const ForgetPassword = (req,res)=>{
     const {email} = req.body;
