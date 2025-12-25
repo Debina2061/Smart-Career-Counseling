@@ -14,5 +14,6 @@ export const envConfig = {
     emailPassword: process.env.EMAIL_NODEMAILER_PASSWORD,
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     cloudSecret: process.env.CLOUDINARY_API_SECRET,
-    cloudKey: process.env.CLOUDINARY_API_KEY
+    cloudKey: process.env.CLOUDINARY_API_KEY,
+    groqApiUrl: process.env.GROQ_SECRET_API_KEY
 }
