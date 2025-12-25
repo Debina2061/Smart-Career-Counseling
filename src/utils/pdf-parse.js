@@ -42,5 +42,24 @@ export const ExtractText = async (pdfSource) => {
   }
 };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // const resumeText = await ExtractText("https://www.saugatgiri.com.np/saugatGiri.pdf");
 // console.log(resumeText);
