@@ -9,5 +9,10 @@ export const envConfig = {
     githubSecretClient: process.env.GITHUB_SECRET_CLIENT_KEY,
     googleClinet: process.env.GOOGLE_CLIENT_KEY,
     googleSecretClient: process.env.GOOGLE_SECRET_CLIENT_KEY,
-    jwtSecretToken: process.env.JWT_SECRET_TOKEN
+    jwtSecretToken: process.env.JWT_SECRET_TOKEN,
+    emailUser:process.env.EMAIL_USER,
+    emailPassword: process.env.EMAIL_NODEMAILER_PASSWORD,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    cloudSecret: process.env.CLOUDINARY_API_SECRET,
+    cloudKey: process.env.CLOUDINARY_API_KEY
 }

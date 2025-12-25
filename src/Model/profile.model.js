@@ -21,14 +21,14 @@ const profileSchema = new mongoose.Schema({
         type:String,
         enum:["secondary","bachelor","master","phd"]
     },
-    skils:{
+    skills:{
         type: [String],
         null: true,
         default:null
     },
     interest:{
         type: [String],
-        default:none
+        default:null
     },
     experience:{
         type:[Object],

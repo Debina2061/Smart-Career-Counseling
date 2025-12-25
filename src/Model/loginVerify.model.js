@@ -5,7 +5,7 @@ const loginVerifySchema = new mongoose.Schema({
     token : String,
     expiredAt: {
         type: Date,
-        default: Date.now()*5*60*1000 //5min
+        default: Date.now()+ 5*60*1000 //5min
     }
 });
 
