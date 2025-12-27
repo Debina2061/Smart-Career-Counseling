@@ -11,7 +11,6 @@ import { cloudinary } from "../utils/cloudinary.js";
 import fs from "fs/promises";
 import { Profile } from "../Model/profile.model.js";
 
-
 export const SignUp = async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
@@ -59,12 +58,13 @@ export const LoginRequest = async (req, res) => {
     });
   }
   const isPasswordValid = bcrypt.compareSync(password, existingUser.password);
+  
   if (!isPasswordValid) {
     return res.status(401).json({
       message: "Invalid password",
     });
   }
-
+  generateToken({_id:existingUser._id},res);
   let token = crypto.randomBytes(64).toString("hex");
   await LoginVerify.create({
     email,
