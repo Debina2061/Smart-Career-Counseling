@@ -1,4 +1,3 @@
-import express from "express";
 
 const ErrorHandler = (fn)=>{
     return (req,res)=>{
