@@ -14,7 +14,8 @@ export const ExtractText = async (pdfSource) => {
         if (!response.ok) {
           throw new Error(`Failed to fetch PDF: ${response.statusText}`);
         }
-        buffer = await response.buffer();
+        const arrayBuffer = await response.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
       }
     } else if (Buffer.isBuffer(pdfSource)) {
       // If it's already a buffer
@@ -23,7 +24,7 @@ export const ExtractText = async (pdfSource) => {
       throw new Error('Invalid PDF source. Provide a URL, file path, or Buffer.');
     }
 
-    const res = new PDFParse({data:buffer});
+    const res = new PDFParse(buffer);
     const data = await res.getText();
     return data.text
       .split(" ")
@@ -42,6 +43,3 @@ export const ExtractText = async (pdfSource) => {
   }
 };
 
-
-// const resumeText = await ExtractText("https://www.debinabaraili.com.np/debinaBaraili.pdf");
-// console.log(resumeText);
