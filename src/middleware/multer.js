@@ -1,4 +1,5 @@
 import multer from "multer";
+const memoryStorage = multer.memoryStorage()
 const storage = multer.diskStorage({
   destination(req, file, cb) {
     cb(null, "./src/uploads");
@@ -9,8 +10,8 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({
-  storage,
+export const uploadCv = multer({
+  memoryStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter(req, file, cb) {
     if (file.mimetype !== "application/pdf") {
@@ -19,4 +20,15 @@ const upload = multer({
     cb(null, true);
   },
 });
-export default upload;
+
+//TODO: I have to fix file mimetype properly
+export const uploadImage = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter(req, file, cb) {
+    if (file.mimetype !== "img/*") {
+      return cb(new Error("Only image  are allowed"), false);
+    }
+    cb(null, true);
+  },
+});
