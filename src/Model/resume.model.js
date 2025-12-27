@@ -6,6 +6,13 @@ export const resumeSchema = new mongoose.Schema({
         ref: "User",
         required: true
     },
+    resumeUrl : {
+        type : String
+    },
+    resumeContent : {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+    },
     atsScore:{
         type:Number,
         min: 0,
