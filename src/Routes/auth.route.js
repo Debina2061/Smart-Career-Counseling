@@ -6,7 +6,7 @@ import { SignUp,SignOut,LoginRequest,loginVerify, profile, ChangePassword, verif
 import { ErrorHandler } from "../utils/errorHandler.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.js";
-import { fileHandling } from "../Controller/ats.controller.js";
+// import { fileHandling } from "../Controller/ats.controller.js";
 /* Oauth Authentication routes */
 authRouter.get("/github",passport.authenticate("github",{session:false}))
 authRouter.get("/github/callback",passport.authenticate("github",{failureRedirect:"/login",session:false}),(req,res)=>{
@@ -31,7 +31,7 @@ authRouter.route("/verify-email").post(ErrorHandler(verifyEmailForgetPassword));
 authRouter.route("set-newpassword").post(ErrorHandler(ForgetPassword));
 
 
-authRouter.route("/file").post(upload.array("file",5),fileHandling);
+// authRouter.route("/file").post(upload.array("file",5),fileHandling);
 
 export {authRouter};
     

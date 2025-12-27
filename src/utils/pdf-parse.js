@@ -43,23 +43,5 @@ export const ExtractText = async (pdfSource) => {
 };
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// const resumeText = await ExtractText("https://www.saugatgiri.com.np/saugatGiri.pdf");
+// const resumeText = await ExtractText("https://www.debinabaraili.com.np/debinaBaraili.pdf");
 // console.log(resumeText);

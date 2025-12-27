@@ -11,6 +11,7 @@ import { cloudinary } from "../utils/cloudinary.js";
 import fs from "fs/promises";
 import { Profile } from "../Model/profile.model.js";
 
+
 export const SignUp = async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
