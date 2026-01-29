@@ -4,12 +4,11 @@ import { generateToken } from "../utils/generateToken.js";
 import { Decryption, Encryption } from "../utils/encrypt.js";
 import crypto from "crypto";
 import { envConfig } from "../Config/envConfig.js";
-import { LoginVerify } from "../Model/loginVerify.model.js";
 import { SendMail } from "../utils/nodemailer.js";
-import { verifyEmail } from "../utils/templates/loginVerifyMail.js";
 import { cloudinary } from "../utils/cloudinary.js";
 import fs from "fs/promises";
 import { Profile } from "../Model/profile.model.js";
+import jwt from "jsonwebtoken";
 
 export const SignUp = async (req, res) => {
   const { name, email, password } = req.body;
@@ -43,7 +42,6 @@ export const SignUp = async (req, res) => {
   });
 };
 
-//TODO: i have to remove token from database after certain minutes
 export const LoginRequest = async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -64,42 +62,14 @@ export const LoginRequest = async (req, res) => {
       message: "Invalid password",
     });
   }
-  generateToken({_id:existingUser._id},res);
-  let token = crypto.randomBytes(64).toString("hex");
-  await LoginVerify.create({
-    email,
-    token,
-  });
-  let verifyLink = `${envConfig.backendUrl}/auth/verify-token?email=${email}&token=${token}`;
-  const htmlContent = verifyEmail(email, verifyLink);
-  SendMail({ email: email, subject: "Verify Login User", html: htmlContent });
-  // res.redirect(verifyLink);
+  const jwtToken = jwt.sign(existingUser?._id,envConfig.jwtSecretToken,{expiresIn:"1d"});
+  generateToken(jwtToken,res);
   return res.status(200).json({
-    messsage: "Please check your email to verify you login",
-    token: token,
+    message:"Login successfully",
+    jwtToken : jwtToken
   });
 };
 
-export const loginVerify = async (req, res) => {
-  const { token, email } = req.query;
-  const tokenResponse = await LoginVerify.findOne({
-    email: email,
-    token: token,
-  });
-  if (!tokenResponse) {
-    return res.status(401).json({ message: "verification failed" });
-  }
-
-  const userInfo = await User.findOne({ email: tokenResponse?.email }).select(
-    "-password"
-  );
-  console.log(userInfo);
-  generateToken(userInfo, res);
-  return res.status(200).json({
-    message: "User signed in successfully",
-    user: userInfo?.user,
-  });
-};
 
 export const SignOut = async (req, res) => {
   res.clearCookie("jwt");

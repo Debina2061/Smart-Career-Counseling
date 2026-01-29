@@ -1,6 +1,7 @@
 import { envConfig } from "./Config/envConfig.js"
 import { app } from "./main.js"
 
+
 app.use("/",(req,res)=>{
     console.log(`${req.method} ${req.url} ${req.ip}`);
     return res.json("")
