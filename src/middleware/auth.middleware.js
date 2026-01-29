@@ -2,9 +2,20 @@ import jwt from "jsonwebtoken";
 import { envConfig } from "../Config/envConfig.js";
 import { User } from "../Model/user.model.js";
 
+const extractTokenFromCookies = (req)=>{
+    const token = req.cookies?.jwt;
+    return token || null;
+}
+
+const extractTokenFromHeader = (req)=>{
+    const jwt = req.headers?.authorization;
+    const token = jwt.startsWith("Bearer ") ? jwt.split(" ")[1] : jwt;
+    return token || null;
+}
 
 export const authenticateToken = async(req,res,next)=>{
-    const token = req.cookies?.jwt;
+    const token = extractTokenFromCookies(req) || extractTokenFromHeader(req);
+    console.log(token)
     if(!token){
         return res.status(401).json({
             message:"Access Denied. No token provided"
