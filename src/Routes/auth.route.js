@@ -32,4 +32,3 @@ authRouter.route("set-newpassword").post(ErrorHandler(ForgetPassword));
 
 
 export {authRouter};
-    
