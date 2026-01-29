@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { type } from "os";
 
 const userSchema = new mongoose.Schema({
     name:{
@@ -33,6 +34,10 @@ const userSchema = new mongoose.Schema({
     DateCreated:{
         type: Date,
         default: Date.now()
+    },
+    isVerified : {
+        type : Boolean,
+        default: false
     }
 });
 
