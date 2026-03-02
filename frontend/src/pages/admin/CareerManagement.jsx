@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FaPlus, FaTrash, FaEdit } from 'react-icons/fa';
 import AdminLayout from '../../components/AdminLayout';
 import { careerAPI } from '../../utils/api';
+import { useAdminNotification } from '../../context/AdminNotificationContext';
 
 const emptyForm = {
   careerName: '',
@@ -35,18 +36,16 @@ function CareerManagement() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({ ...emptyForm });
   const [editingId, setEditingId] = useState(null);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const { notify } = useAdminNotification();
 
   const loadCareers = async () => {
     setLoading(true);
-    setError('');
     try {
       const response = await careerAPI.getAllCareers({ limit: 100 });
       const payload = response?.data || response;
       setCareers(payload?.careers || []);
     } catch (err) {
-      setError(err.message || 'Failed to load careers');
+      notify(err.message || 'Failed to load careers', 'error');
     } finally {
       setLoading(false);
     }
@@ -77,8 +76,6 @@ function CareerManagement() {
   };
 
   const handleEdit = async (careerId) => {
-    setMessage('');
-    setError('');
     try {
       const response = await careerAPI.getCareerDetails(careerId);
       const payload = response?.data || response;
@@ -102,14 +99,13 @@ function CareerManagement() {
         workEnvironment: career.workEnvironment || [],
       });
     } catch (err) {
-      setError(err.message || 'Failed to load career details');
+      notify(err.message || 'Failed to load career details', 'error');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setMessage('');
+
 
     const payload = {
       careerName: formData.careerName,
@@ -142,38 +138,30 @@ function CareerManagement() {
     try {
       if (editingId) {
         await careerAPI.updateCareer(editingId, payload);
-        setMessage('Career updated successfully.');
+        notify('Career updated successfully.', 'success');
       } else {
         await careerAPI.createCareer(payload);
-        setMessage('Career created successfully.');
+        notify('Career created successfully.', 'success');
       }
       resetForm();
       loadCareers();
     } catch (err) {
-      setError(err.message || 'Failed to save career');
+      notify(err.message || 'Failed to save career', 'error');
     }
   };
 
   const handleDelete = async (careerId) => {
-    setError('');
-    setMessage('');
     try {
       await careerAPI.deleteCareer(careerId);
-      setMessage('Career removed successfully.');
+      notify('Career removed successfully.', 'success');
       loadCareers();
     } catch (err) {
-      setError(err.message || 'Failed to delete career');
+      notify(err.message || 'Failed to delete career', 'error');
     }
   };
 
   return (
     <AdminLayout title="Career Profiles" eyebrow="Career Management">
-      {(error || message) && (
-        <div className={`mb-6 px-4 py-3 rounded-lg ${error ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-          {error || message}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-2 bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6">
           <h3 className="text-xl font-bold text-slate-900 mb-4">{editingId ? 'Edit Career' : 'Create Career'}</h3>

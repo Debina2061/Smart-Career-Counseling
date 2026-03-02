@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { FaMapPin, FaChevronDown, FaTrophy, FaCode, FaDatabase, FaPalette, FaBriefcase, FaCloud, FaChartBar, FaArrowUp, FaSync } from 'react-icons/fa'
-import { Link } from 'react-router-dom'
+import { FaMapPin, FaChevronDown, FaTrophy, FaCode, FaDatabase, FaPalette, FaBriefcase, FaCloud, FaChartBar, FaArrowUp, FaSync, FaGlobe } from 'react-icons/fa'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
-import { careerAPI } from '../utils/api'
+import { careerAPI, resumeAPI } from '../utils/api'
 
 function CareerRecommendation() {
   const { user } = useAuth();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -18,11 +19,35 @@ function CareerRecommendation() {
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=User'
   });
   const [careerMatches, setCareerMatches] = useState([]);
+  const [resumeType, setResumeType] = useState(null);
   const [summaryStats, setSummaryStats] = useState([
     { icon: FaTrophy, value: '--', label: 'Top Match' },
     { icon: FaArrowUp, value: '--', label: 'Avg Match' },
     { icon: FaBriefcase, value: '--', label: 'Career Paths' },
   ]);
+  const [urlParams, setUrlParams] = useState({
+    career: null,
+    level: null,
+    skills: null,
+    location: null
+  });
+  const [autoSearchActive, setAutoSearchActive] = useState(false);
+
+  useEffect(() => {
+    // Parse URL parameters for auto-search
+    const params = new URLSearchParams(location.search);
+    const parsedParams = {
+      career: params.get('career'),
+      level: params.get('level'),
+      skills: params.get('skills'),
+      location: params.get('location')
+    };
+    
+    if (Object.values(parsedParams).some(v => v !== null)) {
+      setUrlParams(parsedParams);
+      setAutoSearchActive(true);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (user) {
@@ -31,13 +56,60 @@ function CareerRecommendation() {
         avatar: user.avatarUrl || user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email || 'User'}`
       });
     }
-    loadRecommendations();
-  }, [user]);
+    
+    // Auto-load recommendations if URL parameters are present
+    if (autoSearchActive && Object.values(urlParams).some(v => v !== null)) {
+      handleAutoSearch();
+    } else {
+      loadRecommendations();
+    }
+  }, [user, autoSearchActive]);
+
+  const handleAutoSearch = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      // If manual recommendation generation is needed, call it with parameters
+      const response = await careerAPI.generateRecommendations({
+        searchCriteria: {
+          career: urlParams.career,
+          level: urlParams.level,
+          skills: urlParams.skills ? urlParams.skills.split(',').map(s => s.trim()) : null,
+          location: urlParams.location
+        }
+      });
+      console.log('Auto-search recommendations:', response);
+      await loadRecommendations();
+    } catch (err) {
+      console.error('Error in auto-search:', err);
+      let errorMessage = err.message || 'Failed to generate recommendations';
+      if (!errorMessage.includes('resume')) {
+        errorMessage += '. Please ensure your resume is uploaded.';
+      }
+      setError(errorMessage);
+      // Still try to load existing recommendations
+      await loadRecommendations();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadRecommendations = async () => {
     setLoading(true);
     setError('');
     try {
+      // First, try to get the resume to check its type
+      try {
+        const resumeResponse = await resumeAPI.getResume();
+        const resumeData = resumeResponse?.data || null;
+        if (resumeData?.resume_type) {
+          setResumeType(resumeData.resume_type);
+        }
+      } catch (err) {
+        // If we can't get resume type, that's okay - just continue
+        console.log('Could not fetch resume type:', err.message);
+      }
+
       const response = await careerAPI.getRecommendations();
       const recommendationDoc = response?.data || response;
       const recommendations = recommendationDoc?.recommendations || [];
@@ -56,6 +128,7 @@ function CareerRecommendation() {
         description: career.aiInsights || (career.matchReasons?.join('. ') || 'No insights available yet.'),
         skillGaps: career.skillGaps || [],
         growthPotential: career.growthPotential || 'medium',
+        jobSearch: career.jobSearch || null,
         color: 'from-teal-500 to-teal-600'
       }});
 
@@ -93,6 +166,17 @@ function CareerRecommendation() {
     setLoading(true);
     setError('');
     try {
+      // Fetch resume type
+      try {
+        const resumeResponse = await resumeAPI.getResume();
+        const resumeData = resumeResponse?.data || null;
+        if (resumeData?.resume_type) {
+          setResumeType(resumeData.resume_type);
+        }
+      } catch (err) {
+        console.log('Could not fetch resume type:', err.message);
+      }
+
       const response = await careerAPI.generateRecommendations();
       console.log('Generated recommendations:', response);
       await loadRecommendations();
@@ -137,7 +221,8 @@ function CareerRecommendation() {
         ...detail,
         matchScore: career.matchScore,
         skillGaps: career.skillGaps,
-        growthPotential: career.growthPotential
+        growthPotential: career.growthPotential,
+        jobSearch: career.jobSearch || null
       });
     } catch (err) {
       setDetailsError(err.message || 'Failed to load career details');
@@ -155,7 +240,17 @@ function CareerRecommendation() {
             <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white">
               <FaMapPin className="text-lg" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Career Recommendations</h2>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Career Recommendations</h2>
+              {autoSearchActive && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  <FaGlobe className="inline mr-1" />
+                  Auto-search: {urlParams.career || 'All careers'} 
+                  {urlParams.level && ` • Level: ${urlParams.level}`}
+                  {urlParams.location && ` • Location: ${urlParams.location}`}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <button
@@ -182,6 +277,26 @@ function CareerRecommendation() {
           {error && (
             <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6">
               {error}
+            </div>
+          )}
+
+          {resumeType === 'Non-Technical' && (
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-xl shadow-sm p-8 mb-8">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center text-white shrink-0">
+                  <span className="text-2xl">📊</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Non-Technical Resume Detected</h3>
+                  <p className="text-gray-700">
+                    Your resume appears to be non-technical (HR, Management, Sales, Marketing, Finance, etc.). 
+                    Career recommendations are currently optimized for technical resumes. 
+                  </p>
+                  <p className="text-gray-600 text-sm mt-2">
+                    💡 For non-technical roles, we recommend consulting with a career advisor or exploring industry-specific job boards.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -240,6 +355,31 @@ function CareerRecommendation() {
                       <p className="font-semibold">{career.skillGaps.length}</p>
                     </div>
                   </div>
+                  {career.jobSearch?.job_portals?.length > 0 ? (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                        <span className="font-semibold text-gray-700">Job Options</span>
+                        <span className="text-xs text-gray-500">{career.jobSearch.job_level}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {career.jobSearch.job_portals.map((portal) => (
+                          <a
+                            key={`${career.careerId}-${portal.portal_name}`}
+                            href={portal.search_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1 rounded-full border border-teal-200 text-teal-700 text-xs font-semibold hover:bg-teal-50"
+                          >
+                            {portal.portal_name}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 mb-4">
+                      Job portal links will appear after refreshing recommendations.
+                    </p>
+                  )}
                   <button
                     onClick={() => handleViewDetails(career)}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition"
@@ -340,6 +480,25 @@ function CareerRecommendation() {
                     <p className="text-gray-700">
                       {detailsCareer.salaryRange.min || detailsCareer.salaryRange.minimum || 'N/A'} - {detailsCareer.salaryRange.max || detailsCareer.salaryRange.maximum || 'N/A'}
                     </p>
+                  </div>
+                )}
+
+                {detailsCareer.jobSearch?.job_portals?.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Job Portal Links</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {detailsCareer.jobSearch.job_portals.map((portal) => (
+                        <a
+                          key={`details-${portal.portal_name}`}
+                          href={portal.search_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1 rounded-full border border-purple-200 text-purple-700 text-xs font-semibold hover:bg-purple-50"
+                        >
+                          {portal.portal_name}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
