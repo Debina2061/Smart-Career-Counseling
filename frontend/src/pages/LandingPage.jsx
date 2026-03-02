@@ -24,7 +24,7 @@ function LandingPage() {
               <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black leading-tight md:leading-snug mt-4 mb-6 text-gray-900">
                 AI-Powered Smart Career
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-purple-500 to-indigo-600">
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-purple-600 via-purple-500 to-indigo-600">
                   Counseling Platform
                 </span>
               </h1>
@@ -34,7 +34,7 @@ function LandingPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start mb-8">
-                <Link to={'/getstarted'} className="px-7 py-3 rounded-full text-white font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:shadow-lg transition w-full sm:w-auto text-center">
+                <Link to={'/getstarted'} className="px-7 py-3 rounded-full text-white font-semibold bg-linear-to-r from-purple-600 to-indigo-600 hover:shadow-lg transition w-full sm:w-auto text-center">
                   Get Started
                 </Link>
                 <Link to={'/features'} className="px-7 py-3 rounded-full text-gray-700 font-medium bg-white border-2 border-gray-200 hover:border-gray-300 hover:shadow transition w-full sm:w-auto text-center">
@@ -58,7 +58,7 @@ function LandingPage() {
             <div className="flex justify-center lg:justify-end order-1 lg:order-2">
               <div className="relative w-full max-w-md lg:max-w-lg">
                 {/* Gradient background container */}
-                <div className="rounded-3xl bg-gradient-to-br from-purple-100 to-indigo-100 p-8 shadow-2xl">
+                <div className="rounded-3xl bg-linear-to-br from-purple-100 to-indigo-100 p-8 shadow-2xl">
                   <div className="bg-white rounded-2xl overflow-hidden shadow-lg">
                     <img src={Stock} alt="Career Guidance" className="w-full h-64 md:h-72 object-cover" />
                   </div>
@@ -80,7 +80,7 @@ function LandingPage() {
                       <span className="text-purple-600 font-semibold">12/15</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full w-4/5 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full"></div>
+                      <div className="h-full w-4/5 bg-linear-to-r from-purple-600 to-indigo-600 rounded-full"></div>
                     </div>
                   </div>
 
@@ -103,7 +103,7 @@ function LandingPage() {
         </div>
 
         <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 p-8 shadow-sm hover:shadow-md transition">
+          <div className="rounded-2xl bg-linear-to-br from-blue-50 to-blue-100 p-8 shadow-sm hover:shadow-md transition">
             <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-blue-600 mb-5 shadow-sm"> 
               <FaSearch className="text-2xl" />
             </div>
@@ -111,7 +111,7 @@ function LandingPage() {
             <p className="text-sm text-gray-600 leading-relaxed">Scan your resume against ATS systems and get instant feedback on optimization</p>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-pink-50 to-pink-100 p-8 shadow-sm hover:shadow-md transition">
+          <div className="rounded-2xl bg-linear-to-br from-pink-50 to-pink-100 p-8 shadow-sm hover:shadow-md transition">
             <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-pink-600 mb-5 shadow-sm"> 
               <FaChartLine className="text-2xl" />
             </div>
@@ -119,7 +119,7 @@ function LandingPage() {
             <p className="text-sm text-gray-600 leading-relaxed">Get personalized career paths based on your skills, interests, and market trends</p>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100 p-8 shadow-sm hover:shadow-md transition">
+          <div className="rounded-2xl bg-linear-to-br from-indigo-50 to-indigo-100 p-8 shadow-sm hover:shadow-md transition">
             <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-indigo-600 mb-5 shadow-sm"> 
               <FaLightbulb className="text-2xl" />
             </div>
@@ -127,7 +127,7 @@ function LandingPage() {
             <p className="text-sm text-gray-600 leading-relaxed">Identify skill gaps and get recommendations for courses and learning paths</p>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 p-8 shadow-sm hover:shadow-md transition">
+          <div className="rounded-2xl bg-linear-to-br from-purple-50 to-purple-100 p-8 shadow-sm hover:shadow-md transition">
             <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-purple-600 mb-5 shadow-sm"> 
               <FaComments className="text-2xl" />
             </div>
@@ -181,7 +181,7 @@ function LandingPage() {
 
       {/* CTA BANNER */}
       <section className="px-4 sm:px-6 md:px-8 lg:px-16 xl:px-20 py-12 md:py-16">
-        <div className="bg-gradient-to-r from-sky-500 via-purple-500 to-purple-600 rounded-3xl text-white p-10 sm:p-12 md:p-16 text-center shadow-2xl">
+        <div className="bg-linear-to-r from-sky-500 via-purple-500 to-purple-600 rounded-3xl text-white p-10 sm:p-12 md:p-16 text-center shadow-2xl">
           <h3 className="text-3xl md:text-4xl font-bold mb-3">Ready to Transform Your Career?</h3>
           <p className="mb-8 text-sky-100 text-lg max-w-2xl mx-auto">Join thousands of students who have found their dream career path</p>
           <Link to={'/getstarted'} className="inline-block px-8 py-4 rounded-full bg-white text-purple-600 font-bold hover:shadow-lg transition text-lg">Get Started Free</Link>

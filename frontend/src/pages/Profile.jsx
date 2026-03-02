@@ -287,13 +287,13 @@ function Profile() {
   const resumeDate = resume?.updatedAt ? new Date(resume.updatedAt).toLocaleDateString() : '';
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-stone-50 to-amber-50">
+    <div className="flex h-screen bg-linear-to-br from-slate-50 via-stone-50 to-amber-50">
       <Sidebar />
 
       <div className="flex-1 ml-52 flex flex-col overflow-hidden">
         <header className="bg-white/80 backdrop-blur border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-sm">
+            <div className="w-10 h-10 rounded-lg bg-linear-to-br from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-sm">
               <FaUser className="text-lg" />
             </div>
             <div>
@@ -311,7 +311,7 @@ function Profile() {
               >
                 <FaBell className="text-xl" />
                 {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow">
+                  <span className="absolute -top-1 -right-1 min-w-5 h-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow">
                     {notifications.length}
                   </span>
                 )}
@@ -398,7 +398,7 @@ function Profile() {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div className="lg:col-span-1">
               <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-                <div className="h-1 bg-gradient-to-r from-teal-500 via-emerald-400 to-amber-400" />
+                <div className="h-1 bg-linear-to-r from-teal-500 via-emerald-400 to-amber-400" />
                 <div className="p-6">
                   <div className="text-center mb-6">
                     <img src={userProfile.avatar} alt={userProfile.name} className="w-24 h-24 rounded-full mx-auto mb-4 shadow-md ring-4 ring-amber-100" />

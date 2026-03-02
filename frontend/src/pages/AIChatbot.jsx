@@ -300,7 +300,7 @@ function AIChatbot() {
                 >
                   <div className={`flex gap-3 max-w-md ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     {/* Avatar */}
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                       message.sender === 'user' 
                         ? 'bg-blue-600 text-white' 
                         : 'bg-purple-600 text-white'
@@ -320,7 +320,7 @@ function AIChatbot() {
                           : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'
                       }`}>
                         {message.sender === 'user' ? (
-                          <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>
+                          <p className="text-sm whitespace-pre-wrap wrap-break-word">{message.text}</p>
                         ) : (
                           <div className="text-sm prose prose-sm max-w-none markdown-content">
                             <ReactMarkdown 
@@ -406,7 +406,7 @@ function AIChatbot() {
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0">
                       <FaRobot className="text-sm" />
                     </div>
                     <div className="bg-white text-gray-900 border border-gray-200 rounded-lg rounded-bl-none p-4">

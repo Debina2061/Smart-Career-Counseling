@@ -86,7 +86,7 @@ function AdminProfile() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Admin Identity Card */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200/60 overflow-hidden">
-          <div className="h-24 bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600" />
+          <div className="h-24 bg-linear-to-r from-teal-500 via-emerald-500 to-teal-600" />
           <div className="px-6 pb-6 -mt-12">
             <div className="relative w-24 h-24 mx-auto mb-4 group">
               <img
@@ -129,7 +129,7 @@ function AdminProfile() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="w-full py-2.5 bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-xl font-semibold shadow-lg shadow-teal-500/25 hover:shadow-xl hover:shadow-teal-500/30 transition-all disabled:opacity-60"
+                className="w-full py-2.5 bg-linear-to-r from-teal-600 to-emerald-500 text-white rounded-xl font-semibold shadow-lg shadow-teal-500/25 hover:shadow-xl hover:shadow-teal-500/30 transition-all disabled:opacity-60"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>

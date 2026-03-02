@@ -521,7 +521,7 @@ function ATSScannerEnhanced() {
                 </div>
 
                 {/* Info Box */}
-                <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
+                <div className="mt-6 bg-linear-to-r from-blue-50 to-purple-50 rounded-lg p-4">
                   <h4 className="font-semibold text-gray-900 text-sm mb-2">🎯 Scoring Methods</h4>
                   <ul className="text-xs text-gray-700 space-y-1">
                     <li><strong>Quick Scan:</strong> Fast ATS compatibility check</li>
@@ -644,7 +644,7 @@ function ATSScannerEnhanced() {
                       </div>
 
                       {/* Final Score Card */}
-                      <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl p-8 text-white mb-8 text-center">
+                      <div className="bg-linear-to-br from-purple-600 to-blue-600 rounded-xl p-8 text-white mb-8 text-center">
                         <h4 className="text-lg font-medium mb-2 opacity-90">Your ATS Score</h4>
                         <div className="text-6xl font-bold mb-3">{weightedResults.final_score}/100</div>
                         <div className="inline-block bg-white/20 px-6 py-2 rounded-full text-sm font-semibold">
@@ -794,7 +794,7 @@ function ATSScannerEnhanced() {
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                   <div className="flex justify-center mb-6">
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
+                    <div className="w-24 h-24 bg-linear-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
                       <FaChartLine className="text-5xl text-blue-600" />
                     </div>
                   </div>
@@ -802,7 +802,7 @@ function ATSScannerEnhanced() {
                   <p className="text-gray-600 mb-6">
                     Upload your resume and choose between Quick Scan or Detailed Scoring to get started
                   </p>
-                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 max-w-md mx-auto">
+                  <div className="bg-linear-to-r from-blue-50 to-purple-50 rounded-lg p-6 max-w-md mx-auto">
                     <h4 className="font-semibold text-gray-900 mb-3">What you'll get:</h4>
                     <ul className="text-sm text-gray-700 space-y-2 text-left">
                       <li className="flex items-start gap-2">

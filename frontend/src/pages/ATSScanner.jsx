@@ -712,7 +712,7 @@ function ATSScanner() {
                       // Selected Scan Details View
                       <div>
                         {/* Scan Info Banner */}
-                        <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 mb-6">
+                        <div className="bg-linear-to-r from-purple-50 to-blue-50 rounded-lg p-6 mb-6">
                           <div className="flex items-start justify-between">
                             <div>
                               <div className="flex items-center gap-2 mb-2">
@@ -760,7 +760,7 @@ function ATSScanner() {
                           
                           return (
                             <div className="mb-6">
-                              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+                              <div className="bg-linear-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
                                 <div className="text-center">
                                   <p className="text-sm text-gray-600 mb-2">
                                     {selectedHistoryScan.scanType === 'detailed' ? 'Overall ATS Score' : 'ATS Compatibility Score'}
@@ -787,7 +787,7 @@ function ATSScanner() {
                                   </div>
                                   <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                                     <div
-                                      className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
+                                      className="h-full bg-linear-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
                                       style={{ width: `${score}%` }}
                                     />
                                   </div>
@@ -911,7 +911,7 @@ function ATSScanner() {
                       </div>
                     ) : scanHistory.length > 0 ? (
                       // History List View
-                      <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto pr-2">
+                      <div className="grid grid-cols-1 gap-4 max-h-150 overflow-y-auto pr-2">
                         {scanHistory.map((scan) => {
                           // Get score from either detailed or quick scan results
                           let score = 0;

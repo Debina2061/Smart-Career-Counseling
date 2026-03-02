@@ -178,13 +178,13 @@ function Dashboard() {
   const recentChats = chat?.sessions || []
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-stone-50 to-amber-50">
+    <div className="flex h-screen bg-linear-to-br from-slate-50 via-stone-50 to-amber-50">
       <Sidebar />
 
       <div className="flex-1 ml-52 flex flex-col overflow-hidden">
         <header className="bg-white/80 backdrop-blur border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-sm">
+            <div className="w-10 h-10 rounded-lg bg-linear-to-br from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-sm">
               <FaChartLine className="text-lg" />
             </div>
             <div>
@@ -258,7 +258,7 @@ function Dashboard() {
                     <p className="text-xs uppercase tracking-widest text-slate-500">Profile completion</p>
                     <div className="mt-3 h-2 w-full rounded-full bg-slate-200">
                       <div
-                        className="h-2 rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-amber-400"
+                        className="h-2 rounded-full bg-linear-to-r from-teal-500 via-emerald-400 to-amber-400"
                         style={{ width: `${Math.min(100, completionPercent)}%` }}
                       ></div>
                     </div>
@@ -293,7 +293,7 @@ function Dashboard() {
                     <Link
                       key={index}
                       to={action.link}
-                      className={`bg-gradient-to-br ${action.gradient} rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition`}
+                      className={`bg-linear-to-br ${action.gradient} rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
@@ -451,7 +451,7 @@ function Dashboard() {
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-200">
                     <div
-                      className="h-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300"
+                      className="h-2 rounded-full bg-linear-to-r from-amber-500 via-amber-400 to-yellow-300"
                       style={{ width: `${Math.min(100, atsScore || 0)}%` }}
                     ></div>
                   </div>

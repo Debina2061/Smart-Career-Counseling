@@ -91,7 +91,7 @@ function StudentManagement() {
           </select>
           <button
             onClick={loadUsers}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
+            className="px-4 py-2 rounded-xl bg-linear-to-r from-teal-600 to-emerald-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
           >
             Apply Filters
           </button>
