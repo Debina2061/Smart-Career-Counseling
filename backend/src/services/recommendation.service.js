@@ -3,6 +3,7 @@ import { Resume } from "../Model/resume.model.js";
 import { Profile } from "../Model/profile.model.js";
 import { Recommendation } from "../Model/recommendation.model.js";
 import { getCareerRecommendationAI } from "../utils/groq.setup.js";
+import { generateJobSearchLinks } from "../utils/jobSearchLinks.js";
 
 // Weights for scoring algorithm
 const WEIGHTS = {
@@ -478,6 +479,8 @@ export async function generateRecommendations(userId) {
         
         console.log(`[SERVICE] ==================== CALCULATING CAREER MATCHES ====================`);
         
+        const atsScore = Number.isFinite(resume?.atsScore) ? resume.atsScore : 0;
+
         // Calculate scores for each career
         const scoredCareers = [];
         let processedCount = 0;
@@ -528,6 +531,13 @@ export async function generateRecommendations(userId) {
                 
                 const matchReasons = generateMatchReasons(scores, userTechnicalSkills, career);
                 
+                const jobSearch = generateJobSearchLinks({
+                    career_name: career.careerName,
+                    ats_score: atsScore,
+                    extracted_skills: [...userTechnicalSkills, ...userSoftSkills],
+                    preferred_location: resumeData?.personalInfo?.location || ""
+                });
+
                 scoredCareers.push({
                     careerId: career._id,
                     careerName: career.careerName,
@@ -540,7 +550,8 @@ export async function generateRecommendations(userId) {
                     salaryRange: career.salaryRange || {},
                     marketDemand: career.marketDemand || "medium",
                     experienceLevel: career.experienceLevel || "entry",
-                    detailedScores: scores
+                    detailedScores: scores,
+                    jobSearch
                 });
                 
                 processedCount++;
@@ -682,7 +693,8 @@ export async function saveRecommendations(userId, recommendationData) {
             skillGaps: r.skillGaps || [],
             growthPotential: r.growthPotential || "low",
             aiInsights: r.aiInsights || null,
-            learningPath: r.learningPath || null
+            learningPath: r.learningPath || null,
+            jobSearch: r.jobSearch || null
         }));
         
         if (existing) {

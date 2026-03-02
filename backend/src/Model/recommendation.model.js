@@ -23,7 +23,18 @@ const recommendationSchema = new mongoose.Schema({
             type: String,
             enum: ["low", "medium", "high"]
         },
-        aiInsights: String
+        aiInsights: String,
+        learningPath: String,
+        jobSearch: {
+            final_keyword: String,
+            job_level: String,
+            job_portals: [
+                {
+                    portal_name: String,
+                    search_url: String
+                }
+            ]
+        }
     }],
     generatedAt: {
         type: Date,

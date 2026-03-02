@@ -9,7 +9,8 @@ import {
     deleteCareer,
     compareWithCareer,
     checkRecommendationHealth,
-    debugResumeData
+    debugResumeData,
+    searchCareers
 } from "../Controller/recommendation.controller.js";
 import { ErrorHandler } from "../utils/errorHandler.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
@@ -28,6 +29,10 @@ recommendationRouter.route("/debug-resume")
 // User routes (require authentication)
 recommendationRouter.route("/generate")
     .post(authenticateToken, ErrorHandler(generateCareerRecommendations));
+
+// Career search with custom parameters (auto-search)
+recommendationRouter.route("/search")
+    .post(authenticateToken, ErrorHandler(searchCareers));
 
 recommendationRouter.route("/")
     .get(authenticateToken, ErrorHandler(getRecommendations));

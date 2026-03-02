@@ -232,6 +232,90 @@ export const getCareerDetails = async (req, res) => {
 };
 
 /**
+ * Search for careers with custom parameters (for auto-search feature)
+ * POST /recommendation/search
+ * @param {string} career - Career name to search for
+ * @param {Array<string>} skills - Required skills
+ * @param {string} level - Experience level
+ * @param {string} location - Preferred location
+ */
+export const searchCareers = async (req, res) => {
+    try {
+        const userId = req.user?._id;
+        const { career, skills = [], level, location, includeJobs = true } = req.body;
+        
+        if (!career) {
+            return res.status(400).json({
+                message: "Career search parameter is required"
+            });
+        }
+
+        console.log(`[SEARCH] Searching for career: ${career}, skills: ${skills}, level: ${level}`);
+        
+        // Find careers matching the search criteria
+        const filter = { isActive: true };
+        const searchRegex = new RegExp(career, 'i');
+        filter.$or = [
+            { careerName: searchRegex },
+            { description: searchRegex },
+            { 'requiredSkills.technical': searchRegex }
+        ];
+
+        if (level) {
+            filter.experienceLevel = new RegExp(level, 'i');
+        }
+
+        const matchedCareers = await Career.find(filter).limit(10);
+
+        if (matchedCareers.length === 0) {
+            return res.status(404).json({
+                message: `No careers found matching "${career}". Try a different search term.`,
+                data: { careers: [] }
+            });
+        }
+
+        // Generate job search links for matched careers
+        let enrichedCareers = matchedCareers.map(c => ({
+            _id: c._id,
+            careerName: c.careerName,
+            category: c.category,
+            description: c.description,
+            experienceLevel: c.experienceLevel,
+            requiredSkills: c.requiredSkills,
+            salaryRange: c.salaryRange
+        }));
+
+        if (includeJobs) {
+            const { generateCustomJobSearchLinks } = await import("../utils/jobSearchLinks.js");
+            enrichedCareers = enrichedCareers.map(c => ({
+                ...c,
+                jobSearch: generateCustomJobSearchLinks({
+                    career: c.careerName,
+                    skills: skills || [],
+                    level: level,
+                    location: location
+                })
+            }));
+        }
+
+        return res.status(200).json({
+            message: "Career search completed successfully",
+            data: {
+                careers: enrichedCareers,
+                searchQuery: { career, skills, level, location },
+                totalResults: enrichedCareers.length
+            }
+        });
+    } catch (error) {
+        console.error("Career search error:", error);
+        return res.status(500).json({
+            message: "Failed to search careers",
+            error: process.env.NODE_ENV === 'development' ? error.message : "Internal error occurred"
+        });
+    }
+};
+
+/**
  * Get all available careers (for browsing)
  * GET /recommendation/careers
  */
