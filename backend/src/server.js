@@ -15,8 +15,15 @@ import { requestLogger, errorLogger } from "./middleware/logger.middleware.js";
 
 const app = express();
 
-// Connect Database
-connectDb();
+// Connect Database and start server
+const startServer = async () => {
+    await connectDb();
+
+    app.listen(envConfig.portNumber, () => {
+        console.log(`Server running at http://localhost:${envConfig.portNumber}`);
+        console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+    });
+};
 
 // Middleware for CORS
 app.use(cors({
@@ -103,8 +110,7 @@ app.use((req, res) => {
     });
 });
 
-// Start server
-app.listen(envConfig.portNumber, () => {
-    console.log(`Server running at http://localhost:${envConfig.portNumber}`);
-    console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+startServer().catch((error) => {
+    console.error(`Server failed to start: ${error?.message}`);
+    process.exit(1);
 });
