@@ -35,6 +35,21 @@ export const resumeSchema = new mongoose.Schema({
     analysisError: {
         type: String,
         default: ""
+    },
+    resume_type: {
+        type: String,
+        enum: ["Technical", "Non-Technical", "Hybrid", "Unknown"],
+        default: "Unknown"
+    },
+    resume_type_confidence: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0
+    },
+    resume_type_indicators: {
+        type: mongoose.Schema.Types.Mixed,
+        default: { technical: [], nonTechnical: [] }
     }
 }, { timestamps: true });
 
