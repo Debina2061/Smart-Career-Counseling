@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { FaUsers, FaCheckCircle, FaBriefcase, FaLightbulb, FaFileAlt, FaStar } from 'react-icons/fa';
 import AdminLayout from '../../components/AdminLayout';
 import { adminAPI } from '../../utils/api';
+import { useAdminNotification } from '../../context/AdminNotificationContext';
 
 function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [recentUsers, setRecentUsers] = useState([]);
   const [recentJobs, setRecentJobs] = useState([]);
-  const [error, setError] = useState('');
+  const { notify } = useAdminNotification();
 
   useEffect(() => {
     const load = async () => {
@@ -18,7 +19,7 @@ function AdminDashboard() {
         setRecentUsers(payload?.recent?.users || []);
         setRecentJobs(payload?.recent?.jobs || []);
       } catch (err) {
-        setError(err.message || 'Failed to load admin dashboard');
+        notify(err.message || 'Failed to load admin dashboard', 'error');
       }
     };
     load();
@@ -65,12 +66,6 @@ function AdminDashboard() {
 
   return (
     <AdminLayout title="Admin Dashboard" eyebrow="Overview">
-      {error && (
-        <div className="mb-6 px-4 py-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-100">
-          {error}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {cards.map((card) => {
           const Icon = card.icon;
