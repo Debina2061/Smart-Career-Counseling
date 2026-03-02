@@ -1,4 +1,5 @@
 ﻿import crypto from "crypto";
+import axios from "axios";
 import { envConfig } from "../Config/envConfig.js";
 import { LoginVerify } from "../Model/loginVerify.model.js";
 import { Resume } from "../Model/resume.model.js";
@@ -6,11 +7,13 @@ import { Profile } from "../Model/profile.model.js";
 import { User } from "../Model/user.model.js";
 import { Recommendation } from "../Model/recommendation.model.js";
 import { ChatSession } from "../Model/chatbot.model.js";
-import { uploadPdf } from "../utils/cloudinary.js";
+import { ATSScanHistory } from "../Model/atsScanHistory.model.js";
+import { uploadPdf, cloudinary } from "../utils/cloudinary.js";
 import { SendMail } from "../utils/nodemailer.js";
 import { verifyEmail } from "../utils/templates/loginVerifyMail.js";
 import { ExtractText } from "../utils/pdf-parse.js";
 import { analyzeResumeContent } from "../utils/resumeAnalysis.js";
+import { calculateATSScore, extractSkillsFromJobDescription, detectResumeType } from "../utils/atsScoring.js";
 import { getUserApplications } from "../services/job.service.js";
 import { inngest } from "../services/inngest/client.js";
 
@@ -73,6 +76,13 @@ export const uploadResume = async (req, res) => {
     resumeDoc.suggestions = analysis.suggestions;
     resumeDoc.analysisStatus = "completed";
     resumeDoc.analysisError = "";
+    
+    // Detect resume type
+    const resumeTypeResult = detectResumeType(extractedText);
+    resumeDoc.resume_type = resumeTypeResult.type;
+    resumeDoc.resume_type_confidence = resumeTypeResult.confidence;
+    resumeDoc.resume_type_indicators = resumeTypeResult.indicators;
+    
     await resumeDoc.save();
 
     return res.status(200).json({
@@ -82,6 +92,9 @@ export const uploadResume = async (req, res) => {
       atsScore: analysis.atsScore,
       suggestions: analysis.suggestions,
       analysisStatus: resumeDoc.analysisStatus,
+      resume_type: resumeTypeResult.type,
+      resume_type_confidence: resumeTypeResult.confidence,
+      resume_type_indicators: resumeTypeResult.indicators,
     });
   } catch (error) {
     console.error("Resume upload error:", error);
@@ -109,6 +122,57 @@ export const getResume = async (req, res) => {
     message: "Resume fetched successfully",
     data: resume,
   });
+};
+
+export const getResumePdf = async (req, res) => {
+  try {
+    const resume = await Resume.findOne({ userId: req.user._id });
+    if (!resume || !resume.resumeUrl) {
+      return res.status(404).json({ message: "Resume PDF not found" });
+    }
+
+    console.log("[getResumePdf] Fetching PDF for user:", req.user._id);
+    console.log("[getResumePdf] Resume URL:", resume.resumeUrl);
+
+    // Approach 1: Proxy the PDF from Cloudinary
+    try {
+      const response = await axios.get(resume.resumeUrl, {
+        responseType: "arraybuffer",
+        timeout: 15000,
+        maxRedirects: 5,
+      });
+      console.log("[getResumePdf] Fetched", response.data.byteLength, "bytes");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "inline; filename=resume.pdf");
+      res.setHeader("Cache-Control", "private, max-age=300");
+      return res.send(Buffer.from(response.data));
+    } catch (proxyErr) {
+      console.error("[getResumePdf] Proxy fetch failed:", proxyErr.message);
+    }
+
+    // Approach 2: Generate a signed Cloudinary URL and redirect
+    if (resume.resumePublicId) {
+      try {
+        const signedUrl = cloudinary.url(resume.resumePublicId, {
+          resource_type: "raw",
+          sign_url: true,
+          secure: true,
+          type: "upload",
+        });
+        console.log("[getResumePdf] Redirecting to signed URL:", signedUrl);
+        return res.redirect(signedUrl);
+      } catch (signErr) {
+        console.error("[getResumePdf] Signed URL failed:", signErr.message);
+      }
+    }
+
+    // Approach 3: Redirect to the original Cloudinary URL as last resort
+    console.log("[getResumePdf] Redirecting to original URL");
+    return res.redirect(resume.resumeUrl);
+  } catch (err) {
+    console.error("[getResumePdf] Fatal error:", err.message, err.stack);
+    return res.status(500).json({ message: "Failed to fetch resume PDF" });
+  }
 };
 
 export const getDashboard = async (req, res) => {
@@ -234,3 +298,440 @@ export const verifyUser = async (req, res) => {
   await LoginVerify.findOneAndDelete({ email: email, token: token });
   return res.status(200).json({ message: "User verified successfully" });
 };
+
+/**
+ * ============================================
+ * WEIGHTED ATS SCORING ENDPOINT
+ * ============================================
+ * Calculates comprehensive ATS score based on:
+ * - Keyword Matching (50%)
+ * - Section Completeness (20%)
+ * - Experience & Projects (20%)
+ * - Formatting & Quality (10%)
+ * 
+ * Can be used with or without job description
+ */
+export const calculateWeightedATSScore = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { jobDescription, requiredSkills } = req.body;
+
+    // Get user's resume
+    const resume = await Resume.findOne({ userId });
+    
+    if (!resume || !resume.resumeUrl) {
+      return res.status(404).json({
+        message: "No resume found. Please upload your resume first.",
+        success: false
+      });
+    }
+
+    // Extract resume text
+    let resumeText = "";
+    
+    // Try to get text from stored parsed content first
+    if (resume.resumeContent) {
+      try {
+        const content = typeof resume.resumeContent === 'string' 
+          ? JSON.parse(resume.resumeContent) 
+          : resume.resumeContent;
+        
+        // Build full text from structured content
+        const parts = [];
+        
+        if (content.personalInfo) {
+          const pi = content.personalInfo;
+          parts.push(
+            pi.name || '',
+            pi.email || '',
+            pi.phone || '',
+            pi.location || '',
+            pi.linkedin || '',
+            pi.portfolio || ''
+          );
+        }
+        
+        if (content.summary) parts.push(content.summary);
+        
+        if (Array.isArray(content.experience)) {
+          content.experience.forEach(exp => {
+            parts.push(
+              exp.company || '',
+              exp.position || '',
+              exp.description || '',
+              ...(exp.achievements || [])
+            );
+          });
+        }
+        
+        if (Array.isArray(content.education)) {
+          content.education.forEach(edu => {
+            parts.push(
+              edu.institution || '',
+              edu.degree || '',
+              edu.field || ''
+            );
+          });
+        }
+        
+        if (content.skills) {
+          parts.push(
+            ...(content.skills.technical || []),
+            ...(content.skills.frameworks || []),
+            ...(content.skills.languages || []),
+            ...(content.skills.soft || [])
+          );
+        }
+        
+        if (Array.isArray(content.projects)) {
+          content.projects.forEach(proj => {
+            parts.push(
+              proj.name || '',
+              proj.description || '',
+              ...(proj.technologies || [])
+            );
+          });
+        }
+        
+        if (Array.isArray(content.certifications)) {
+          content.certifications.forEach(cert => {
+            parts.push(cert.name || '', cert.issuer || '');
+          });
+        }
+        
+        resumeText = parts.filter(Boolean).join(' ');
+      } catch (parseError) {
+        console.error('Error parsing resume content:', parseError);
+      }
+    }
+    
+    // If no text extracted from structured content, try extracting from PDF
+    if (!resumeText || resumeText.length < 100) {
+      try {
+        resumeText = await ExtractText(resume.resumeUrl);
+      } catch (extractError) {
+        console.error('Error extracting text from PDF:', extractError);
+        return res.status(500).json({
+          message: "Could not extract text from resume. Please try uploading again.",
+          error: extractError.message,
+          success: false
+        });
+      }
+    }
+
+    // Determine required skills
+    let skillsList = [];
+    
+    if (Array.isArray(requiredSkills) && requiredSkills.length > 0) {
+      // Use provided skills
+      skillsList = requiredSkills.map(s => s.trim()).filter(Boolean);
+    } else if (jobDescription && typeof jobDescription === 'string') {
+      // Extract skills from job description
+      skillsList = extractSkillsFromJobDescription(jobDescription);
+    }
+
+    // Calculate weighted ATS score
+    const scoreResult = calculateATSScore(
+      resumeText,
+      skillsList,
+      resume.resumeContent
+    );
+
+    // Save the new weighted score to database (optional - add new field if needed)
+    resume.weightedAtsScore = scoreResult.final_score;
+    resume.lastScoredAt = new Date();
+    await resume.save();
+
+    // Save to scan history
+    await saveScanToHistory(userId, {
+      resumeUrl: resume.resumeUrl,
+      resumePublicId: resume.resumePublicId,
+      resumeName: "Resume.pdf",
+      scanType: "detailed",
+      jobDescription: jobDescription || "",
+      detailedResults: scoreResult,
+      resumeSnapshot: resume.resumeContent
+    });
+
+    return res.status(200).json({
+      message: "ATS score calculated successfully",
+      success: true,
+      data: scoreResult,
+      metadata: {
+        resumeId: resume._id,
+        analyzedWith: jobDescription ? 'job description' : (skillsList.length > 0 ? 'required skills' : 'general assessment'),
+        totalSkillsAnalyzed: skillsList.length,
+        resumeLength: resumeText.length
+      }
+    });
+
+  } catch (error) {
+    console.error("Weighted ATS scoring error:", error);
+    return res.status(500).json({
+      message: "Error calculating ATS score",
+      error: error.message,
+      success: false
+    });
+  }
+};
+
+/**
+ * Score resume against specific job posting
+ * Simplified endpoint that requires job description
+ */
+export const scoreResumeForJob = async (req, res) => {
+  try {
+    const { jobDescription } = req.body;
+
+    if (!jobDescription || typeof jobDescription !== 'string' || jobDescription.trim().length < 20) {
+      return res.status(400).json({
+        message: "Please provide a valid job description (minimum 20 characters)",
+        success: false
+      });
+    }
+
+    // Reuse the main scoring function
+    return await calculateWeightedATSScore(req, res);
+
+  } catch (error) {
+    console.error("Job-specific scoring error:", error);
+    return res.status(500).json({
+      message: "Error scoring resume for job",
+      error: error.message,
+      success: false
+    });
+  }
+};
+
+/**
+ * ============================================
+ * ATS SCAN HISTORY MANAGEMENT
+ * ============================================
+ * Save, retrieve, and manage ATS scan history
+ */
+
+/**
+ * Save ATS scan to history
+ * Called internally after each scan
+ */
+export const saveScanToHistory = async (userId, scanData) => {
+  try {
+    const scanHistory = new ATSScanHistory({
+      userId,
+      resumeUrl: scanData.resumeUrl,
+      resumePublicId: scanData.resumePublicId || "",
+      resumeName: scanData.resumeName || "Resume.pdf",
+      scanType: scanData.scanType || "quick",
+      jobDescription: scanData.jobDescription || "",
+      quickScanResults: scanData.quickScanResults || {},
+      detailedResults: scanData.detailedResults || {},
+      resumeSnapshot: scanData.resumeSnapshot || {},
+      scannedAt: new Date()
+    });
+
+    await scanHistory.save();
+    return scanHistory;
+  } catch (error) {
+    console.error("Error saving scan to history:", error);
+    return null;
+  }
+};
+
+/**
+ * HTTP endpoint to save scan to history
+ * POST /user/scan-history
+ */
+export const saveScanToHistoryHTTP = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const scanData = req.body;
+
+    const savedScan = await saveScanToHistory(userId, scanData);
+    
+    if (!savedScan) {
+      return res.status(500).json({
+        message: "Failed to save scan to history",
+        success: false
+      });
+    }
+
+    return res.status(201).json({
+      message: "Scan saved to history successfully",
+      success: true,
+      data: { scanId: savedScan._id }
+    });
+  } catch (error) {
+    console.error("Error saving scan via HTTP:", error);
+    return res.status(500).json({
+      message: error.message || "Failed to save scan",
+      success: false
+    });
+  }
+};
+
+/**
+ * Get all scan history for a user
+ * Returns list of all scans, sorted by most recent
+ */
+export const getScanHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { limit = 50, page = 1 } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [scans, totalCount] = await Promise.all([
+      ATSScanHistory.find({ userId })
+        .sort({ scannedAt: -1 })
+        .limit(parseInt(limit))
+        .skip(skip)
+        .select('-resumeSnapshot -__v')
+        .lean(),
+      ATSScanHistory.countDocuments({ userId })
+    ]);
+
+    // Format scans for response - include full results for detail view
+    const formattedScans = scans.map(scan => ({
+      _id: scan._id,
+      id: scan._id,
+      resumeName: scan.resumeName,
+      resumeUrl: scan.resumeUrl,
+      scanType: scan.scanType,
+      scannedAt: scan.scannedAt,
+      jobDescription: scan.jobDescription || '',
+      // Include full results for detail view
+      quickScanResults: scan.quickScanResults || {},
+      detailedResults: scan.detailedResults || {},
+      // Summary fields for list view
+      score: scan.scanType === 'detailed' 
+        ? scan.detailedResults?.overallScore || scan.detailedResults?.final_score || 0
+        : scan.quickScanResults?.compatibility || 0,
+      strengthLevel: scan.detailedResults?.strength_level || 'N/A',
+      hasJobDescription: !!scan.jobDescription,
+      matchedSkillsCount: scan.scanType === 'detailed'
+        ? scan.detailedResults?.matched_skills?.length || 0
+        : scan.quickScanResults?.matchedCount || scan.quickScanResults?.matched?.length || 0
+    }));
+
+    return res.status(200).json({
+      message: "Scan history retrieved successfully",
+      success: true,
+      data: {
+        scans: formattedScans,
+        pagination: {
+          total: totalCount,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(totalCount / parseInt(limit))
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Get scan history error:", error);
+    return res.status(500).json({
+      message: "Error retrieving scan history",
+      error: error.message,
+      success: false
+    });
+  }
+};
+
+/**
+ * Get a specific scan by ID
+ * Returns full scan details
+ */
+export const getScanById = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { scanId } = req.params;
+
+    const scan = await ATSScanHistory.findOne({
+      _id: scanId,
+      userId: userId
+    }).lean();
+
+    if (!scan) {
+      return res.status(404).json({
+        message: "Scan not found",
+        success: false
+      });
+    }
+
+    return res.status(200).json({
+      message: "Scan retrieved successfully",
+      success: true,
+      data: scan
+    });
+
+  } catch (error) {
+    console.error("Get scan by ID error:", error);
+    return res.status(500).json({
+      message: "Error retrieving scan",
+      error: error.message,
+      success: false
+    });
+  }
+};
+
+/**
+ * Delete a scan from history
+ */
+export const deleteScan = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { scanId } = req.params;
+
+    const result = await ATSScanHistory.findOneAndDelete({
+      _id: scanId,
+      userId: userId
+    });
+
+    if (!result) {
+      return res.status(404).json({
+        message: "Scan not found",
+        success: false
+      });
+    }
+
+    return res.status(200).json({
+      message: "Scan deleted successfully",
+      success: true
+    });
+
+  } catch (error) {
+    console.error("Delete scan error:", error);
+    return res.status(500).json({
+      message: "Error deleting scan",
+      error: error.message,
+      success: false
+    });
+  }
+};
+
+/**
+ * Delete all scan history for user
+ */
+export const clearScanHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const result = await ATSScanHistory.deleteMany({ userId });
+
+    return res.status(200).json({
+      message: `Successfully deleted ${result.deletedCount} scan(s)`,
+      success: true,
+      deletedCount: result.deletedCount
+    });
+
+  } catch (error) {
+    console.error("Clear scan history error:", error);
+    return res.status(500).json({
+      message: "Error clearing scan history",
+      error: error.message,
+      success: false
+    });
+  }
+};
+
+
