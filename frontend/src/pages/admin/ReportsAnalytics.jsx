@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { adminAPI } from '../../utils/api';
+import { useAdminNotification } from '../../context/AdminNotificationContext';
 
 function ReportsAnalytics() {
   const [analytics, setAnalytics] = useState(null);
-  const [error, setError] = useState('');
+  const { notify } = useAdminNotification();
 
   useEffect(() => {
     const load = async () => {
@@ -13,7 +14,7 @@ function ReportsAnalytics() {
         const payload = response?.data || response;
         setAnalytics(payload?.data || payload);
       } catch (err) {
-        setError(err.message || 'Failed to load analytics');
+        notify(err.message || 'Failed to load analytics', 'error');
       }
     };
     load();
@@ -27,12 +28,6 @@ function ReportsAnalytics() {
 
   return (
     <AdminLayout title="Reports & Analytics" eyebrow="Performance Insights">
-      {error && (
-        <div className="mb-6 px-4 py-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-100">
-          {error}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6">
           <h3 className="text-xl font-bold text-slate-900 mb-4">Career Matching Report</h3>
