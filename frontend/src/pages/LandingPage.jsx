@@ -30,7 +30,7 @@ function LandingPage() {
               </h1>
 
               <p className="text-gray-600 max-w-xl mx-auto lg:mx-0 mb-8 text-sm md:text-base leading-relaxed">
-                Resume scanning, skill analysis, career recommendation & AI guidance tailored for students and fresh graduates.
+                Resume scanning, career recommendation & AI guidance tailored for students and fresh graduates.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start mb-8">
