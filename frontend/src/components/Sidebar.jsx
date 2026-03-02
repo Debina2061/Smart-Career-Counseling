@@ -1,12 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FaFileAlt, FaMapPin, FaBrain, FaRobot, FaUser, FaSignOutAlt, FaTachometerAlt } from 'react-icons/fa';
+import { FaFileAlt, FaMapPin, FaRobot, FaUser, FaSignOutAlt, FaTachometerAlt, FaFilePdf } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: FaTachometerAlt },
+  { path: '/resume-builder', label: 'Resume Builder', icon: FaFilePdf },
   { path: '/ats-scanner', label: 'ATS Resume Scanner', icon: FaFileAlt },
   { path: '/career-recommendation', label: 'Career Recommendation', icon: FaMapPin },
-  { path: '/skill-analysis', label: 'Skill Analysis', icon: FaBrain },
   { path: '/ai-chatbot', label: 'AI Chatbot', icon: FaRobot },
   { path: '/profile', label: 'Profile', icon: FaUser },
 ];
@@ -23,7 +23,7 @@ function Sidebar() {
       <div className="px-6 py-6 border-b border-gray-200">
         <Link to="/dashboard">
           <h1 className="text-2xl font-bold text-gray-900">
-            Smart <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">Career</span>
+            Smart <span className="text-transparent bg-clip-text bg-linear-to-r from-purple-600 to-indigo-600">Career</span>
           </h1>
         </Link>
       </div>
