@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { FaRobot, FaPaperPlane, FaChevronDown } from 'react-icons/fa'
+import { FaRobot, FaPaperPlane, FaChevronDown, FaPlus, FaTrash, FaComments, FaHistory } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
@@ -24,30 +24,131 @@ function AIChatbot() {
     }
   }, [user]);
 
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: 'bot',
-      text: 'Hello! 👋 I\'m your AI Career Assistant. I\'m here to help you with career-related questions, resume tips, skill development, and more. How can I assist you today?',
-      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    }
-  ])
-
+  const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Session state
+  const [currentSessionId, setCurrentSessionId] = useState(null)
+  const [sessions, setSessions] = useState([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [showSessions, setShowSessions] = useState(false)
+
+  // Load sessions on mount
+  useEffect(() => {
+    if (user) {
+      loadSessions();
+    }
+  }, [user]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const loadSessions = async () => {
+    try {
+      setSessionsLoading(true);
+      const response = await chatbotAPI.getSessions();
+      const loadedSessions = response?.data || [];
+      setSessions(loadedSessions);
+
+      // Auto-load the most recent session if available
+      if (loadedSessions.length > 0) {
+        await loadSession(loadedSessions[0]._id);
+      } else {
+        // No sessions, show welcome message
+        setMessages([{
+          id: 'welcome',
+          sender: 'bot',
+          text: 'Hello! 👋 I\'m your AI Career Assistant. I\'m here to help you with career-related questions, resume tips, skill development, and more. How can I assist you today?',
+          timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+    } catch (err) {
+      console.error('Failed to load sessions:', err);
+      setMessages([{
+        id: 'welcome',
+        sender: 'bot',
+        text: 'Hello! 👋 I\'m your AI Career Assistant. How can I assist you today?',
+        timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      }]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const loadSession = async (sessionId) => {
+    try {
+      const response = await chatbotAPI.getSession(sessionId);
+      const session = response?.data || response;
+      setCurrentSessionId(session._id);
+      const sessionMessages = (session.messages || []).map((msg, i) => ({
+        id: `${session._id}-${i}`,
+        sender: msg.role === 'user' ? 'user' : 'bot',
+        text: msg.content,
+        timestamp: msg.timestamp
+          ? new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : ''
+      }));
+      setMessages(sessionMessages);
+      setShowSessions(false);
+    } catch (err) {
+      console.error('Failed to load session:', err);
+    }
+  };
+
+  const startNewSession = async () => {
+    try {
+      const response = await chatbotAPI.startSession();
+      const session = response?.data || response;
+      setCurrentSessionId(session.sessionId);
+      const sessionMessages = (session.messages || []).map((msg, i) => ({
+        id: `${session.sessionId}-${i}`,
+        sender: msg.role === 'user' ? 'user' : 'bot',
+        text: msg.content,
+        timestamp: msg.timestamp
+          ? new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      }));
+      setMessages(sessionMessages);
+      setShowSessions(false);
+      // Refresh session list
+      loadSessions();
+    } catch (err) {
+      console.error('Failed to start session:', err);
+    }
+  };
+
+  const deleteSession = async (sessionId, e) => {
+    e.stopPropagation();
+    if (!confirm('Delete this conversation?')) return;
+    try {
+      await chatbotAPI.deleteSession(sessionId);
+      setSessions(prev => prev.filter(s => s._id !== sessionId));
+      if (currentSessionId === sessionId) {
+        setCurrentSessionId(null);
+        setMessages([{
+          id: 'welcome',
+          sender: 'bot',
+          text: 'Hello! 👋 Start a new conversation or pick one from your history.',
+          timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
 
+    const msgText = inputValue.trim();
+
     const userMessage = {
-      id: messages.length + 1,
+      id: `user-${Date.now()}`,
       sender: 'user',
-      text: inputValue,
+      text: msgText,
       timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -56,19 +157,35 @@ function AIChatbot() {
     setIsLoading(true);
 
     try {
-      const response = await chatbotAPI.quickAsk(inputValue);
-      
+      let sessionId = currentSessionId;
+
+      // Auto-create a session if none exists
+      if (!sessionId) {
+        const sessionRes = await chatbotAPI.startSession();
+        const session = sessionRes?.data || sessionRes;
+        sessionId = session.sessionId;
+        setCurrentSessionId(sessionId);
+      }
+
+      // Send message through session (persisted in DB)
+      const response = await chatbotAPI.sendMessage(sessionId, msgText);
+      const data = response?.data || response;
+
       const botMessage = {
-        id: messages.length + 2,
+        id: `bot-${Date.now()}`,
         sender: 'bot',
-        text: response?.data?.answer || response?.answer || 'I apologize, but I could not process your request. Please try again.',
+        text: data?.aiResponse?.content || data?.answer || 'I apologize, but I could not process your request. Please try again.',
         timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
       };
 
       setMessages(prev => [...prev, botMessage]);
+
+      // Refresh session list to update titles/timestamps
+      const sessionsRes = await chatbotAPI.getSessions();
+      setSessions(sessionsRes?.data || []);
     } catch (error) {
       const errorMessage = {
-        id: messages.length + 2,
+        id: `error-${Date.now()}`,
         sender: 'bot',
         text: `I'm sorry, I encountered an error: ${error.message || 'Please try again later.'}`,
         timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -102,16 +219,78 @@ function AIChatbot() {
             <h2 className="text-2xl font-bold text-gray-900">AI Chatbot</h2>
           </div>
 
-          <Link to="/profile" className="flex items-center gap-4 border-l border-gray-200 pl-6">
-            <img src={userProfile.avatar} alt={userProfile.name} className="w-9 h-9 rounded-full" />
-            <span className="text-sm font-medium text-gray-900">{userProfile.name}</span>
-            <FaChevronDown className="text-gray-400 text-xs" />
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSessions(prev => !prev)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+            >
+              <FaHistory className="text-sm" />
+              <span>History ({sessions.length})</span>
+            </button>
+            <button
+              onClick={startNewSession}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+            >
+              <FaPlus className="text-sm" />
+              <span>New Chat</span>
+            </button>
+            <Link to="/profile" className="flex items-center gap-4 border-l border-gray-200 pl-4">
+              <img src={userProfile.avatar} alt={userProfile.name} className="w-9 h-9 rounded-full" />
+              <span className="text-sm font-medium text-gray-900">{userProfile.name}</span>
+              <FaChevronDown className="text-gray-400 text-xs" />
+            </Link>
+          </div>
         </header>
 
         {/* CHAT CONTENT */}
-        <div className="flex-1 overflow-y-auto bg-gray-50">
-          <div className="max-w-4xl mx-auto h-full flex flex-col">
+        <div className="flex-1 overflow-hidden bg-gray-50 flex">
+          {/* Session History Sidebar */}
+          {showSessions && (
+            <div className="w-80 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 text-sm">Chat History</h3>
+                <button onClick={() => setShowSessions(false)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {sessionsLoading ? (
+                  <div className="p-4 text-sm text-gray-500">Loading conversations...</div>
+                ) : sessions.length === 0 ? (
+                  <div className="p-4 text-sm text-gray-500">No conversations yet. Start a new chat!</div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {sessions.map((session) => (
+                      <div
+                        key={session._id}
+                        onClick={() => loadSession(session._id)}
+                        className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition group ${currentSessionId === session._id ? 'bg-blue-50 border-l-2 border-blue-600' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{session.title || 'New Conversation'}</p>
+                            <p className="text-xs text-gray-500 truncate mt-1">{session.lastMessage || 'No messages yet'}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-400">{session.messageCount || 0} messages</span>
+                              <span className="text-xs text-gray-400">{session.updatedAt ? new Date(session.updatedAt).toLocaleDateString() : ''}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => deleteSession(session._id, e)}
+                            className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100"
+                            title="Delete conversation"
+                          >
+                            <FaTrash className="text-xs" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="max-w-4xl mx-auto w-full h-full flex flex-col">
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-8 space-y-6">
               {messages.map((message) => (
@@ -270,7 +449,7 @@ function AIChatbot() {
               </div>
             </div>
           </div>
-        </div>
+          </div>        </div>
       </div>
     </div>
   )
