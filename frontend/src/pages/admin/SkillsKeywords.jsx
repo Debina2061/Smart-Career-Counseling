@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FaPlusCircle } from 'react-icons/fa';
 import AdminLayout from '../../components/AdminLayout';
 import { careerAPI } from '../../utils/api';
+import { useAdminNotification } from '../../context/AdminNotificationContext';
 
 function SkillsKeywords() {
   const [careers, setCareers] = useState([]);
@@ -9,8 +10,7 @@ function SkillsKeywords() {
   const [careerDetail, setCareerDetail] = useState(null);
   const [technicalSkill, setTechnicalSkill] = useState('');
   const [softSkill, setSoftSkill] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const { notify } = useAdminNotification();
 
   useEffect(() => {
     const loadCareers = async () => {
@@ -19,21 +19,19 @@ function SkillsKeywords() {
         const payload = response?.data || response;
         setCareers(payload?.careers || []);
       } catch (err) {
-        setError(err.message || 'Failed to load careers');
+        notify(err.message || 'Failed to load careers', 'error');
       }
     };
     loadCareers();
   }, []);
 
   const loadCareerDetail = async (careerId) => {
-    setMessage('');
-    setError('');
     try {
       const response = await careerAPI.getCareerDetails(careerId);
       const payload = response?.data || response;
       setCareerDetail(payload?.data || payload);
     } catch (err) {
-      setError(err.message || 'Failed to load career details');
+      notify(err.message || 'Failed to load career details', 'error');
     }
   };
 
@@ -78,26 +76,18 @@ function SkillsKeywords() {
 
   const handleSave = async () => {
     if (!careerDetail?._id) return;
-    setMessage('');
-    setError('');
     try {
       await careerAPI.updateCareer(careerDetail._id, {
         requiredSkills: careerDetail.requiredSkills,
       });
-      setMessage('Skills and keywords updated successfully.');
+      notify('Skills and keywords updated successfully.', 'success');
     } catch (err) {
-      setError(err.message || 'Failed to update skills');
+      notify(err.message || 'Failed to update skills', 'error');
     }
   };
 
   return (
     <AdminLayout title="Skills & Keywords" eyebrow="ATS Keyword Management">
-      {(error || message) && (
-        <div className={`mb-6 px-4 py-3 rounded-lg ${error ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-          {error || message}
-        </div>
-      )}
-
       <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6 mb-6">
         <label className="text-sm font-semibold text-slate-700">Select Career Profile</label>
         <select
