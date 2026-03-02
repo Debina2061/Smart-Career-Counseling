@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom"
 import { AuthProvider } from "./context/AuthContext"
+import { AdminNotificationProvider } from "./context/AdminNotificationContext"
 import ProtectedRoute from "./components/ProtectedRoute"
 import Header from "./components/Header"
 import LandingPage from "./pages/LandingPage"
@@ -13,8 +14,8 @@ import Dashboard from "./pages/Dashboard"
 import ATSScanner from "./pages/ATSScanner"
 import CareerRecommendation from "./pages/CareerRecommendation"
 import Profile from "./pages/Profile"
-import SkillAnalysis from "./pages/SkillAnalysis"
 import AIChatbot from "./pages/AIChatbot"
+import ResumeBuilder from "./pages/ResumeBuilder"
 import AdminRoute from "./components/AdminRoute"
 import AdminDashboard from "./pages/admin/AdminDashboard"
 import CareerManagement from "./pages/admin/CareerManagement"
@@ -27,6 +28,7 @@ import AdminProfile from "./pages/admin/AdminProfile"
 function App() {
   return (
     <AuthProvider>
+      <AdminNotificationProvider>
       <div className="min-h-screen flex flex-col">
         {/* PAGES */}
         <main>
@@ -61,14 +63,14 @@ function App() {
                 <Profile />
               </ProtectedRoute>
             } />
-            <Route path="/skill-analysis" element={
-              <ProtectedRoute>
-                <SkillAnalysis />
-              </ProtectedRoute>
-            } />
             <Route path="/ai-chatbot" element={
               <ProtectedRoute>
                 <AIChatbot />
+              </ProtectedRoute>
+            } />
+            <Route path="/resume-builder" element={
+              <ProtectedRoute>
+                <ResumeBuilder />
               </ProtectedRoute>
             } />
 
@@ -116,6 +118,7 @@ function App() {
           </Routes>
         </main>
       </div>
+      </AdminNotificationProvider>
     </AuthProvider>
   )
 }
