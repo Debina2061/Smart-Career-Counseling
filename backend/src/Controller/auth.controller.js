@@ -12,43 +12,40 @@ import { LoginVerify } from "../Model/loginVerify.model.js";
 import { verifyEmail } from "../utils/templates/loginVerifyMail.js";
 import { resetPasswordEmail } from "../utils/templates/resetPasswordMail.js";
 
-const EMAIL_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-const createEmailToken = async (email, purpose) => {
-  const token = crypto.randomBytes(20).toString("hex");
+const generateOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+};
+
+const createEmailOtp = async (email, purpose) => {
+  const otp = generateOtp();
   await LoginVerify.deleteMany({ email, purpose });
   await LoginVerify.create({
     email,
-    token,
+    token: otp,
     purpose,
-    expiredAt: new Date(Date.now() + EMAIL_TOKEN_TTL_MS),
+    expiredAt: new Date(Date.now() + OTP_TTL_MS),
   });
-  return token;
+  return otp;
 };
 
 const sendVerificationEmail = async (user) => {
-  const token = await createEmailToken(user.email, "verify");
-  const verifyLink = `${envConfig.backendUrl}/auth/verify-token?email=${encodeURIComponent(
-    user.email,
-  )}&token=${token}`;
-  const htmlContent = verifyEmail(user.email, verifyLink);
+  const otp = await createEmailOtp(user.email, "verify");
+  const htmlContent = verifyEmail(user.email, otp);
   await SendMail({
     email: user.email,
-    subject: "Verify your email",
+    subject: "Verify your email — OTP Code",
     html: htmlContent,
   });
 };
 
 const sendResetPasswordEmail = async (user) => {
-  const token = await createEmailToken(user.email, "reset");
-  const baseUrl = envConfig.frontendUrl || envConfig.backendUrl;
-  const resetLink = `${baseUrl}/reset-password?email=${encodeURIComponent(
-    user.email,
-  )}&token=${token}`;
-  const htmlContent = resetPasswordEmail(user.email, resetLink);
+  const otp = await createEmailOtp(user.email, "reset");
+  const htmlContent = resetPasswordEmail(user.email, otp);
   await SendMail({
     email: user.email,
-    subject: "Reset your password",
+    subject: "Password Reset — OTP Code",
     html: htmlContent,
   });
 };
@@ -87,23 +84,13 @@ export const SignUp = async (req, res) => {
     console.error("Verification email failed:", err?.message);
   }
 
-  // Generate token and auto-login the user
-  const jwtToken = jwt.sign({ _id: newUser._id }, envConfig.jwtSecretToken, {
-    expiresIn: "1d",
-  });
-  generateToken(jwtToken, res);
-
+  // Do NOT auto-login — require OTP verification first
   return res.status(201).json({
-    message: "User created successfully",
-    token: jwtToken,
+    message: "Account created. Please verify your email with the OTP sent to your inbox.",
+    requiresVerification: true,
     user: {
-      _id: newUser._id,
       email: newUser.email,
       name: newUser.name,
-      Role: newUser.Role,
-      isVerified: newUser.isVerified,
-      avatarUrl: newUser.avatarUrl,
-      authProvider: newUser.authProvider,
     },
   });
 };
@@ -203,27 +190,71 @@ export const ChangePassword = async (req, res) => {
 };
 
 export const loginVerify = async (req, res) => {
-  const { email, token } = req.query;
-  if (!email || !token) {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
     return res
       .status(400)
-      .json({ message: "Email and token must be provided" });
+      .json({ message: "Email and OTP must be provided" });
   }
-  const verifyToken = await LoginVerify.findOne({
+  const verifyRecord = await LoginVerify.findOne({
     email: email,
-    token: token,
+    token: otp,
     purpose: "verify",
   });
-  if (!verifyToken) {
-    return res.status(404).json({ message: "Email and token do not match" });
+  if (!verifyRecord) {
+    return res.status(404).json({ message: "Invalid OTP" });
   }
-  if (verifyToken.expiredAt && verifyToken.expiredAt < new Date()) {
-    await LoginVerify.findByIdAndDelete(verifyToken._id);
-    return res.status(410).json({ message: "Token has expired" });
+  if (verifyRecord.expiredAt && verifyRecord.expiredAt < new Date()) {
+    await LoginVerify.findByIdAndDelete(verifyRecord._id);
+    return res.status(410).json({ message: "OTP has expired" });
   }
   await User.findOneAndUpdate({ email: email }, { $set: { isVerified: true } });
-  await LoginVerify.findByIdAndDelete(verifyToken._id);
-  return res.status(200).json({ message: "Email verified successfully" });
+  await LoginVerify.findByIdAndDelete(verifyRecord._id);
+
+  // Generate a JWT so the user is auto-logged-in after verification
+  const verifiedUser = await User.findOne({ email }).select("-password");
+  const jwtToken = jwt.sign({ _id: verifiedUser._id }, envConfig.jwtSecretToken, {
+    expiresIn: "1d",
+  });
+  generateToken(jwtToken, res);
+
+  return res.status(200).json({
+    message: "Email verified successfully",
+    token: jwtToken,
+    user: {
+      _id: verifiedUser._id,
+      email: verifiedUser.email,
+      name: verifiedUser.name,
+      Role: verifiedUser.Role,
+      isVerified: true,
+      avatarUrl: verifiedUser.avatarUrl,
+      authProvider: verifiedUser.authProvider,
+    },
+  });
+};
+
+export const resendOtp = async (req, res) => {
+  const { email, purpose } = req.body;
+  if (!email || !purpose) {
+    return res.status(400).json({ message: "Email and purpose are required" });
+  }
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+  try {
+    if (purpose === "verify") {
+      await sendVerificationEmail(user);
+    } else if (purpose === "reset") {
+      await sendResetPasswordEmail(user);
+    } else {
+      return res.status(400).json({ message: "Invalid purpose" });
+    }
+  } catch (err) {
+    console.error("Resend OTP failed:", err?.message);
+    return res.status(500).json({ message: "Failed to resend OTP" });
+  }
+  return res.status(200).json({ message: "OTP sent successfully" });
 };
 
 export const verifyEmailForgetPassword = async (req, res) => {
@@ -243,24 +274,23 @@ export const verifyEmailForgetPassword = async (req, res) => {
 };
 
 export const ForgetPassword = async (req, res) => {
-  const { email, token } = req.query;
-  const { newPassword } = req.body;
-  if (!email || !token || !newPassword) {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) {
     return res.status(400).json({
-      message: "email, token, and new password must be provided",
+      message: "Email, OTP, and new password must be provided",
     });
   }
-  const resetToken = await LoginVerify.findOne({
+  const resetRecord = await LoginVerify.findOne({
     email: email,
-    token: token,
+    token: otp,
     purpose: "reset",
   });
-  if (!resetToken) {
-    return res.status(404).json({ message: "Invalid or expired reset token" });
+  if (!resetRecord) {
+    return res.status(404).json({ message: "Invalid or expired OTP" });
   }
-  if (resetToken.expiredAt && resetToken.expiredAt < new Date()) {
-    await LoginVerify.findByIdAndDelete(resetToken._id);
-    return res.status(410).json({ message: "Reset token has expired" });
+  if (resetRecord.expiredAt && resetRecord.expiredAt < new Date()) {
+    await LoginVerify.findByIdAndDelete(resetRecord._id);
+    return res.status(410).json({ message: "OTP has expired" });
   }
   const updateUser = await User.findOneAndUpdate(
     { email: email },
@@ -274,10 +304,40 @@ export const ForgetPassword = async (req, res) => {
   if (!updateUser) {
     return res.status(403).json({ message: "Error on forget password" });
   }
-  await LoginVerify.findByIdAndDelete(resetToken._id);
+  await LoginVerify.findByIdAndDelete(resetRecord._id);
   return res.status(200).json({
-    message: "password reset successfully",
+    message: "Password reset successfully",
   });
+};
+
+export const deleteAccount = async (req, res) => {
+  const userId = req.user._id;
+  const email = req.user.email;
+
+  try {
+    // Lazy-import all related models to delete every piece of user data
+    const { Profile } = await import("../Model/profile.model.js");
+    const { Resume } = await import("../Model/resume.model.js");
+    const { Recommendation } = await import("../Model/recommendation.model.js");
+    const { ChatSession } = await import("../Model/chatbot.model.js");
+    const { ATSScanHistory } = await import("../Model/atsScanHistory.model.js");
+
+    await Promise.all([
+      Profile.deleteMany({ userId }),
+      Resume.deleteMany({ userId }),
+      Recommendation.deleteMany({ userId }),
+      ChatSession.deleteMany({ userId }),
+      ATSScanHistory.deleteMany({ userId }),
+      LoginVerify.deleteMany({ email }),
+      User.findByIdAndDelete(userId),
+    ]);
+
+    res.clearCookie("jwt");
+    return res.status(200).json({ message: "Account deleted successfully" });
+  } catch (error) {
+    console.error("Delete account error:", error);
+    return res.status(500).json({ message: "Failed to delete account" });
+  }
 };
 
 export const updateProfile = async (req, res) => {

@@ -2,7 +2,7 @@ import { Router } from "express";
 const authRouter = Router();
 import passport from "passport";
 import { generateToken } from "../utils/generateToken.js";
-import { SignUp,SignOut,LoginRequest,loginVerify, profile, ChangePassword, verifyEmailForgetPassword, ForgetPassword, updateProfile } from "../Controller/auth.controller.js";
+import { SignUp,SignOut,LoginRequest,loginVerify, profile, ChangePassword, verifyEmailForgetPassword, ForgetPassword, updateProfile, resendOtp, deleteAccount } from "../Controller/auth.controller.js";
 import { ErrorHandler } from "../utils/errorHandler.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 import {uploadImage} from "../middleware/multer.js";
@@ -23,11 +23,13 @@ authRouter.get("/google/callback",passport.authenticate("google",{failureRedirec
 authRouter.route("/sign-up").post(ErrorHandler(SignUp));
 authRouter.route("/sign-out").post(ErrorHandler(SignOut));
 authRouter.route("/profile").get(authenticateToken,ErrorHandler(profile)).patch(authenticateToken,uploadImage.single("imgName"),ErrorHandler(updateProfile));
-authRouter.route("/verify-token").get(ErrorHandler(loginVerify));
+authRouter.route("/verify-token").post(ErrorHandler(loginVerify));
 authRouter.route("/login").post(ErrorHandler(LoginRequest))
 authRouter.route("/change-password").post(authenticateToken,ErrorHandler(ChangePassword))
 authRouter.route("/verify-email").post(ErrorHandler(verifyEmailForgetPassword));
 authRouter.route("/set-newpassword").post(ErrorHandler(ForgetPassword));
+authRouter.route("/resend-otp").post(ErrorHandler(resendOtp));
+authRouter.route("/delete-account").delete(authenticateToken, ErrorHandler(deleteAccount));
 
 
 

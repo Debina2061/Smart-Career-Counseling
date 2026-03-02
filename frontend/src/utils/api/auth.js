@@ -32,16 +32,22 @@ export const authAPI = {
     window.location.href = '/signin';
   },
 
-  // Verify token
-  verifyToken: () => api.get('/auth/verify-token'),
+  // Verify email OTP
+  verifyOtp: (email, otp) => api.post('/auth/verify-token', { email, otp }),
+
+  // Resend OTP (purpose: "verify" | "reset")
+  resendOtp: (email, purpose) => api.post('/auth/resend-otp', { email, purpose }),
 
   // Change password
   changePassword: (passwordData) => api.post('/auth/change-password', passwordData),
 
-  // Forgot password
+  // Forgot password — request OTP
   requestPasswordReset: (email) => api.post('/auth/verify-email', { email }),
-  setNewPassword: (email, token, newPassword) =>
-    api.post(`/auth/set-newpassword?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`, {
-      newPassword,
-    }),
+
+  // Reset password with OTP
+  setNewPassword: (email, otp, newPassword) =>
+    api.post('/auth/set-newpassword', { email, otp, newPassword }),
+
+  // Delete user account (requires auth)
+  deleteAccount: () => api.delete('/auth/delete-account'),
 };

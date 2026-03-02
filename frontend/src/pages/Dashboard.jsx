@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import {
   FaArrowRight,
   FaBell,
@@ -16,7 +16,7 @@ import {
 import { Link } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
-import { userAPI } from '../utils/api'
+import { userAPI, authAPI } from '../utils/api'
 
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString() : '--')
 
@@ -29,12 +29,87 @@ const statusTone = (status) => {
 }
 
 function Dashboard() {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const [dashboard, setDashboard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
   const notificationRef = useRef(null)
+
+  // ── Email verification state ──
+  const OTP_LENGTH = 6
+  const RESEND_COOLDOWN = 60
+  const [showOtpInput, setShowOtpInput] = useState(false)
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''))
+  const otpRefs = useRef([])
+  const [verifyError, setVerifyError] = useState('')
+  const [verifyStatus, setVerifyStatus] = useState('')
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [resendTimer, setResendTimer] = useState(0)
+
+  useEffect(() => {
+    if (resendTimer <= 0) return
+    const id = setInterval(() => setResendTimer((t) => t - 1), 1000)
+    return () => clearInterval(id)
+  }, [resendTimer])
+
+  const handleOtpChange = (index, value) => {
+    if (!/^\d?$/.test(value)) return
+    const next = [...otp]
+    next[index] = value
+    setOtp(next)
+    if (value && index < OTP_LENGTH - 1) otpRefs.current[index + 1]?.focus()
+  }
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) otpRefs.current[index - 1]?.focus()
+  }
+  const handleOtpPaste = (e) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH)
+    if (!pasted) return
+    const next = [...otp]
+    pasted.split('').forEach((ch, i) => { next[i] = ch })
+    setOtp(next)
+    otpRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus()
+  }
+
+  const sendVerificationOtp = async () => {
+    setVerifyError('')
+    setVerifyStatus('')
+    try {
+      await authAPI.resendOtp(user.email, 'verify')
+      setShowOtpInput(true)
+      setResendTimer(RESEND_COOLDOWN)
+      setVerifyStatus('Verification code sent to your email')
+    } catch (err) {
+      setVerifyError(err.message || 'Failed to send verification code')
+    }
+  }
+
+  const handleVerifyOtp = useCallback(async () => {
+    const code = otp.join('')
+    if (code.length !== OTP_LENGTH) { setVerifyError('Enter the full 6-digit code'); return }
+    setVerifyLoading(true)
+    setVerifyError('')
+    try {
+      await authAPI.verifyOtp(user.email, code)
+      // Refresh user state
+      try {
+        const profile = await authAPI.getProfile()
+        updateUser(profile.user || profile)
+      } catch { /* ignore */ }
+      setVerifyStatus('Email verified successfully!')
+      setShowOtpInput(false)
+    } catch (err) {
+      setVerifyError(err.message || 'Invalid or expired OTP')
+    } finally {
+      setVerifyLoading(false)
+    }
+  }, [otp, user?.email, updateUser])
+
+  useEffect(() => {
+    if (otp.every((d) => d !== '')) handleVerifyOtp()
+  }, [otp, handleVerifyOtp])
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -240,6 +315,83 @@ function Dashboard() {
           {error && (
             <div className="mb-6 px-4 py-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-100">
               {error}
+            </div>
+          )}
+
+          {/* ── Unverified email banner ── */}
+          {user && user.isVerified === false && (
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-amber-900">Your email is not verified</h4>
+                    <p className="text-sm text-amber-700 mt-0.5">
+                      Verify <span className="font-medium">{user.email}</span> to unlock the full experience.
+                    </p>
+                  </div>
+                </div>
+
+                {!showOtpInput && (
+                  <button
+                    onClick={sendVerificationOtp}
+                    className="shrink-0 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition"
+                  >
+                    Verify Now
+                  </button>
+                )}
+              </div>
+
+              {verifyError && (
+                <div className="mt-3 text-sm text-red-600">{verifyError}</div>
+              )}
+              {verifyStatus && !showOtpInput && (
+                <div className="mt-3 text-sm text-emerald-700">{verifyStatus}</div>
+              )}
+
+              {showOtpInput && (
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                  {verifyStatus && (
+                    <p className="text-sm text-emerald-700 mb-3">{verifyStatus}</p>
+                  )}
+                  <p className="text-sm text-amber-800 mb-3 font-medium">Enter the 6-digit code sent to your email</p>
+                  <div className="flex items-center gap-3 flex-wrap" onPaste={handleOtpPaste}>
+                    {otp.map((digit, i) => (
+                      <input
+                        key={i}
+                        ref={(el) => (otpRefs.current[i] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(i, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                        className="h-12 w-10 rounded-lg border-2 border-amber-300 bg-white text-center text-xl font-bold text-slate-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none transition-all"
+                      />
+                    ))}
+                    <button
+                      onClick={handleVerifyOtp}
+                      disabled={verifyLoading || otp.join('').length !== OTP_LENGTH}
+                      className="ml-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                    >
+                      {verifyLoading ? 'Verifying...' : 'Verify'}
+                    </button>
+                  </div>
+                  <div className="mt-3 text-sm text-amber-700">
+                    {resendTimer > 0 ? (
+                      <span>Resend code in <span className="font-semibold">{resendTimer}s</span></span>
+                    ) : (
+                      <button onClick={sendVerificationOtp} className="font-semibold hover:underline">
+                        Resend Code
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

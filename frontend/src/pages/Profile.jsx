@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { FaFileAlt, FaBrain, FaUser, FaBell, FaCloudUploadAlt, FaPlusCircle, FaCode, FaGraduationCap, FaBriefcase, FaProjectDiagram, FaTools, FaChartBar, FaFilePdf, FaExpand, FaCompress, FaExternalLinkAlt, FaCheckCircle } from 'react-icons/fa'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { FaFileAlt, FaBrain, FaUser, FaBell, FaCloudUploadAlt, FaPlusCircle, FaCode, FaGraduationCap, FaBriefcase, FaProjectDiagram, FaTools, FaChartBar, FaFilePdf, FaExpand, FaCompress, FaExternalLinkAlt, FaCheckCircle, FaShieldAlt, FaTrashAlt } from 'react-icons/fa'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import { authAPI, resumeAPI, userAPI } from '../utils/api'
 
 function Profile() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('personal')
@@ -36,6 +38,99 @@ function Profile() {
 
   const [newSkill, setNewSkill] = useState('')
   const [newInterest, setNewInterest] = useState('')
+
+  // ── Email verification OTP state ──
+  const OTP_LENGTH = 6
+  const RESEND_COOLDOWN = 60
+  const [showOtpInput, setShowOtpInput] = useState(false)
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''))
+  const otpRefs = useRef([])
+  const [verifyError, setVerifyError] = useState('')
+  const [verifyStatus, setVerifyStatus] = useState('')
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [resendTimer, setResendTimer] = useState(0)
+
+  // ── Delete account state ──
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteTyped, setDeleteTyped] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  useEffect(() => {
+    if (resendTimer <= 0) return
+    const id = setInterval(() => setResendTimer((t) => t - 1), 1000)
+    return () => clearInterval(id)
+  }, [resendTimer])
+
+  const handleOtpChange = (index, value) => {
+    if (!/^\d?$/.test(value)) return
+    const next = [...otp]
+    next[index] = value
+    setOtp(next)
+    if (value && index < OTP_LENGTH - 1) otpRefs.current[index + 1]?.focus()
+  }
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) otpRefs.current[index - 1]?.focus()
+  }
+  const handleOtpPaste = (e) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH)
+    if (!pasted) return
+    const next = [...otp]
+    pasted.split('').forEach((ch, i) => { next[i] = ch })
+    setOtp(next)
+    otpRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus()
+  }
+
+  const sendVerificationOtp = async () => {
+    setVerifyError('')
+    setVerifyStatus('')
+    try {
+      await authAPI.resendOtp(user.email, 'verify')
+      setShowOtpInput(true)
+      setResendTimer(RESEND_COOLDOWN)
+      setVerifyStatus('Verification code sent to your email')
+    } catch (err) {
+      setVerifyError(err.message || 'Failed to send verification code')
+    }
+  }
+
+  const handleVerifyOtp = useCallback(async () => {
+    const code = otp.join('')
+    if (code.length !== OTP_LENGTH) { setVerifyError('Enter the full 6-digit code'); return }
+    setVerifyLoading(true)
+    setVerifyError('')
+    try {
+      await authAPI.verifyOtp(user.email, code)
+      try {
+        const profile = await authAPI.getProfile()
+        updateUser(profile.user || profile)
+      } catch { /* ignore */ }
+      setVerifyStatus('Email verified successfully!')
+      setShowOtpInput(false)
+    } catch (err) {
+      setVerifyError(err.message || 'Invalid or expired OTP')
+    } finally {
+      setVerifyLoading(false)
+    }
+  }, [otp, user?.email, updateUser])
+
+  useEffect(() => {
+    if (otp.every((d) => d !== '')) handleVerifyOtp()
+  }, [otp, handleVerifyOtp])
+
+  const handleDeleteAccount = async () => {
+    if (deleteTyped !== 'DELETE') return
+    setDeleteLoading(true)
+    setDeleteError('')
+    try {
+      await authAPI.deleteAccount()
+      logout()
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete account')
+      setDeleteLoading(false)
+    }
+  }
 
   // Build notifications from actual profile/resume status
   const notifications = (() => {
@@ -430,6 +525,14 @@ function Profile() {
                       <FaBrain className="text-lg" />
                       <span>Skills & Interests</span>
                     </button>
+
+                    <button
+                      onClick={() => setActiveTab('account')}
+                      className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition font-semibold ${activeTab === 'account' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
+                    >
+                      <FaShieldAlt className="text-lg" />
+                      <span>Account</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -682,6 +785,140 @@ function Profile() {
                     >
                       {loading ? 'Saving...' : 'Save Changes'}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Account tab ── */}
+              {activeTab === 'account' && (
+                <div className="space-y-6">
+                  {/* Email Verification */}
+                  <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-8">
+                    <h3 className="text-2xl font-bold text-slate-900 mb-6">Email Verification</h3>
+
+                    {user?.isVerified ? (
+                      <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                          <FaCheckCircle className="text-emerald-600 text-lg" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-emerald-800">Email Verified</p>
+                          <p className="text-sm text-emerald-600">{user.email} is verified</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 mb-4">
+                          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold text-amber-800">Email Not Verified</p>
+                            <p className="text-sm text-amber-600">{user?.email} needs verification</p>
+                          </div>
+                          {!showOtpInput && (
+                            <button
+                              onClick={sendVerificationOtp}
+                              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition"
+                            >
+                              Send Code
+                            </button>
+                          )}
+                        </div>
+
+                        {verifyError && <div className="text-sm text-red-600 mb-3">{verifyError}</div>}
+                        {verifyStatus && !showOtpInput && <div className="text-sm text-emerald-700 mb-3">{verifyStatus}</div>}
+
+                        {showOtpInput && (
+                          <div className="border border-slate-200 rounded-xl p-5">
+                            {verifyStatus && <p className="text-sm text-emerald-700 mb-3">{verifyStatus}</p>}
+                            <p className="text-sm text-slate-700 mb-3 font-medium">Enter the 6-digit code sent to your email</p>
+                            <div className="flex items-center gap-3 flex-wrap" onPaste={handleOtpPaste}>
+                              {otp.map((digit, i) => (
+                                <input
+                                  key={i}
+                                  ref={(el) => (otpRefs.current[i] = el)}
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={1}
+                                  value={digit}
+                                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                                  className="h-12 w-10 rounded-lg border-2 border-slate-200 bg-white text-center text-xl font-bold text-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-200 outline-none transition-all"
+                                />
+                              ))}
+                              <button
+                                onClick={handleVerifyOtp}
+                                disabled={verifyLoading || otp.join('').length !== OTP_LENGTH}
+                                className="ml-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                              >
+                                {verifyLoading ? 'Verifying...' : 'Verify'}
+                              </button>
+                            </div>
+                            <div className="mt-3 text-sm text-slate-500">
+                              {resendTimer > 0 ? (
+                                <span>Resend code in <span className="font-semibold text-teal-600">{resendTimer}s</span></span>
+                              ) : (
+                                <button onClick={sendVerificationOtp} className="font-semibold text-teal-600 hover:underline">
+                                  Resend Code
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Delete Account */}
+                  <div className="bg-white/90 rounded-2xl shadow-xl border border-red-200 p-8">
+                    <h3 className="text-2xl font-bold text-red-700 mb-2">Danger Zone</h3>
+                    <p className="text-slate-500 text-sm mb-6">
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+
+                    {!showDeleteConfirm ? (
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 border-2 border-red-300 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition"
+                      >
+                        <FaTrashAlt />
+                        Delete My Account
+                      </button>
+                    ) : (
+                      <div className="border border-red-200 rounded-xl p-5 bg-red-50">
+                        <p className="text-sm text-red-800 font-semibold mb-1">Are you absolutely sure?</p>
+                        <p className="text-sm text-red-600 mb-4">
+                          This will permanently delete your profile, resume, recommendations, chat history, and all scan data.
+                          Type <span className="font-bold">DELETE</span> to confirm.
+                        </p>
+                        {deleteError && <div className="text-sm text-red-600 mb-3">{deleteError}</div>}
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="text"
+                            value={deleteTyped}
+                            onChange={(e) => setDeleteTyped(e.target.value)}
+                            placeholder='Type "DELETE"'
+                            className="flex-1 max-w-xs px-4 py-2 border border-red-300 rounded-lg text-sm bg-white text-slate-900 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                          />
+                          <button
+                            onClick={handleDeleteAccount}
+                            disabled={deleteTyped !== 'DELETE' || deleteLoading}
+                            className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-40"
+                          >
+                            {deleteLoading ? 'Deleting...' : 'Confirm Delete'}
+                          </button>
+                          <button
+                            onClick={() => { setShowDeleteConfirm(false); setDeleteTyped(''); setDeleteError(''); }}
+                            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

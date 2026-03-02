@@ -59,25 +59,9 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       const response = await authAPI.signUp(userData);
-      // If signup returns a token, log them in
-      const token = response.token || response.jwtToken;
-      if (token) {
-        setAuthToken(token);
-        let userPayload = response.user || response;
-        if (!userPayload?.Role) {
-          try {
-            const profile = await authAPI.getProfile();
-            userPayload = profile.user || profile;
-          } catch {
-            // Ignore profile fetch failure
-          }
-        }
-        setUser(userPayload);
-        setIsAuthenticated(true);
-      }
+      // Signup no longer returns a token — user must verify OTP first
       return response;
     } catch (error) {
-      setIsAuthenticated(false);
       throw error;
     }
   };
