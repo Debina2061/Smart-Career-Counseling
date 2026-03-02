@@ -17,7 +17,7 @@ const extractTokenFromHeader = (req) => {
 };
 
 export const authenticateToken = async (req, res, next) => {
-  const token = extractTokenFromCookies(req) || extractTokenFromHeader(req);
+  const token = extractTokenFromCookies(req) || extractTokenFromHeader(req) || req.query?.token || null;
   if (!token) {
     return res.status(401).json({
       message: "Access Denied. No token provided",
