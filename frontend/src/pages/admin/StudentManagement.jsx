@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { adminAPI } from '../../utils/api';
+import { useAdminNotification } from '../../context/AdminNotificationContext';
 
 function StudentManagement() {
   const [users, setUsers] = useState([]);
   const [filters, setFilters] = useState({ search: '', role: 'student', verified: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { notify } = useAdminNotification();
 
   const loadUsers = async () => {
     setLoading(true);
-    setError('');
     try {
       const params = {
         search: filters.search || undefined,
@@ -22,7 +22,7 @@ function StudentManagement() {
       const payload = response?.data || response;
       setUsers(payload?.users || []);
     } catch (err) {
-      setError(err.message || 'Failed to load students');
+      notify(err.message || 'Failed to load students', 'error');
     } finally {
       setLoading(false);
     }
@@ -44,12 +44,6 @@ function StudentManagement() {
 
   return (
     <AdminLayout title="Student Management" eyebrow="Student Directory">
-      {error && (
-        <div className="mb-6 px-4 py-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-100">
-          {error}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total Users', value: totalUsers, accent: 'bg-slate-900 text-white' },

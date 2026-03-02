@@ -2,21 +2,20 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { adminAPI } from '../../utils/api';
+import { useAdminNotification } from '../../context/AdminNotificationContext';
 
 function StudentDetail() {
   const { userId } = useParams();
   const [detail, setDetail] = useState(null);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const { notify } = useAdminNotification();
 
   const loadDetail = async () => {
-    setError('');
     try {
       const response = await adminAPI.getUserDetails(userId);
       const payload = response?.data || response;
       setDetail(payload?.data || payload);
     } catch (err) {
-      setError(err.message || 'Failed to load user details');
+      notify(err.message || 'Failed to load user details', 'error');
     }
   };
 
@@ -26,15 +25,14 @@ function StudentDetail() {
 
   const toggleVerification = async () => {
     if (!detail?.user?._id) return;
-    setMessage('');
     try {
       const updated = await adminAPI.updateUser(detail.user._id, {
         isVerified: !detail.user.isVerified,
       });
       setDetail((prev) => ({ ...prev, user: updated?.data || updated }));
-      setMessage('Verification status updated.');
+      notify('Verification status updated.', 'success');
     } catch (err) {
-      setError(err.message || 'Failed to update user');
+      notify(err.message || 'Failed to update user', 'error');
     }
   };
 
@@ -45,12 +43,6 @@ function StudentDetail() {
           ← Back to students
         </Link>
       </div>
-
-      {(error || message) && (
-        <div className={`mb-6 px-4 py-3 rounded-lg ${error ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-          {error || message}
-        </div>
-      )}
 
       {!detail ? (
         <div className="text-sm text-slate-500">Loading student...</div>
