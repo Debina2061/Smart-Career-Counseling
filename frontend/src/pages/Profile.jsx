@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { FaFileAlt, FaBrain, FaUser, FaBell, FaCloudUploadAlt, FaPlusCircle } from 'react-icons/fa'
+import { FaFileAlt, FaBrain, FaUser, FaBell, FaCloudUploadAlt, FaPlusCircle, FaCode, FaGraduationCap, FaBriefcase, FaProjectDiagram, FaTools, FaChartBar, FaFilePdf, FaExpand, FaCompress, FaExternalLinkAlt, FaCheckCircle } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import { authAPI, resumeAPI, userAPI } from '../utils/api'
@@ -13,7 +13,6 @@ function Profile() {
   const [message, setMessage] = useState({ type: '', text: '' })
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef(null);
-  const notifications = [];
 
   const [userProfile, setUserProfile] = useState({
     name: 'User',
@@ -37,6 +36,67 @@ function Profile() {
 
   const [newSkill, setNewSkill] = useState('')
   const [newInterest, setNewInterest] = useState('')
+
+  // Build notifications from actual profile/resume status
+  const notifications = (() => {
+    const items = [];
+    if (!resume) {
+      items.push({
+        id: 'resume',
+        icon: FaFileAlt,
+        title: 'Upload Your Resume',
+        message: 'Get ATS insights and career recommendations',
+        color: 'purple',
+        action: 'Upload',
+        tab: 'resume'
+      });
+    }
+    if (!profileData.educationLevel) {
+      items.push({
+        id: 'education',
+        icon: FaGraduationCap,
+        title: 'Add Education Level',
+        message: 'Improve career matching accuracy',
+        color: 'blue',
+        action: 'Add',
+        tab: 'personal'
+      });
+    }
+    if (!profileData.skills || profileData.skills.length === 0) {
+      items.push({
+        id: 'skills',
+        icon: FaCode,
+        title: 'Add Your Skills',
+        message: 'Unlock relevant career path recommendations',
+        color: 'green',
+        action: 'Add',
+        tab: 'skills'
+      });
+    }
+    if (!profileData.interest || profileData.interest.length === 0) {
+      items.push({
+        id: 'interests',
+        icon: FaTools,
+        title: 'Add Your Interests',
+        message: 'Get better personalized recommendations',
+        color: 'orange',
+        action: 'Add',
+        tab: 'skills'
+      });
+    }
+    if (!profileData.age) {
+      items.push({
+        id: 'age',
+        icon: FaUser,
+        title: 'Complete Your Profile',
+        message: 'Add your age to finish profile setup',
+        color: 'teal',
+        action: 'Add',
+        tab: 'personal'
+      });
+    }
+    return items;
+  })();
 
   useEffect(() => {
     if (user) {
@@ -246,30 +306,81 @@ function Profile() {
             <div className="relative" ref={notificationRef}>
               <button
                 onClick={() => setShowNotifications((prev) => !prev)}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
                 aria-label="Notifications"
               >
                 <FaBell className="text-xl" />
                 {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow">
+                    {notifications.length}
+                  </span>
                 )}
               </button>
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
-                  <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-900">
-                    Notifications
-                  </div>
-                  {notifications.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-gray-500">No notifications yet.</div>
-                  ) : (
-                    <div className="divide-y divide-gray-100">
-                      {notifications.map((item, index) => (
-                        <div key={index} className="px-4 py-3 text-sm text-gray-700">
-                          {item}
-                        </div>
-                      ))}
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-gray-900 font-semibold text-sm flex items-center gap-2">
+                        <FaBell className="text-teal-600" />
+                        Notifications
+                      </h3>
+                      {notifications.length > 0 && (
+                        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                          {notifications.length}
+                        </span>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center">
+                        <FaCheckCircle className="text-3xl text-green-500 mx-auto mb-2" />
+                        <p className="text-gray-600 text-sm">No notifications</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {notifications.map((notif, index) => {
+                          const Icon = notif.icon;
+                          const colorMap = {
+                            purple: 'text-purple-600 bg-purple-50',
+                            blue: 'text-blue-600 bg-blue-50',
+                            green: 'text-green-600 bg-green-50',
+                            orange: 'text-orange-600 bg-orange-50',
+                            teal: 'text-teal-600 bg-teal-50'
+                          };
+                          const colors = colorMap[notif.color] || colorMap.blue;
+
+                          return (
+                            <div
+                              key={notif.id}
+                              className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition"
+                              onClick={() => {
+                                setActiveTab(notif.tab);
+                                setShowNotifications(false);
+                              }}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${colors}`}>
+                                  <Icon className="text-sm" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-gray-900 font-medium text-sm mb-0.5">
+                                    {notif.title}
+                                  </p>
+                                  <p className="text-gray-500 text-xs">
+                                    {notif.message}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -438,54 +549,64 @@ function Profile() {
 
               {activeTab === 'resume' && (
                 <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-8">
-                  <h3 className="text-2xl font-bold text-slate-900 mb-8">Resume</h3>
-
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center mb-8 hover:border-teal-500 hover:bg-teal-50 transition cursor-pointer"
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf"
-                      onChange={handleResumeFileChange}
-                      className="hidden"
-                    />
-                    <FaCloudUploadAlt className="text-5xl text-slate-400 mx-auto mb-4" />
-                    <h4 className="text-lg font-semibold text-slate-900 mb-2">Upload Resume</h4>
-                    <p className="text-slate-600 mb-4">{resumeFile ? resumeFile.name : 'Drag and drop your resume or click to browse'}</p>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2 rounded-lg transition"
-                    >
-                      {resumeFile ? 'Change File' : 'Choose File'}
-                    </button>
-                    <p className="text-xs text-slate-500 mt-3">PDF only (Max 5MB)</p>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-2xl font-bold text-slate-900">Resume</h3>
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleResumeFileChange}
+                        className="hidden"
+                      />
+                      {!resumeFile ? (
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-2 px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition text-sm"
+                        >
+                          <FaCloudUploadAlt />
+                          {resume?.resumeUrl ? 'Replace Resume' : 'Upload Resume'}
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-slate-600">{resumeFile.name}</span>
+                          <button
+                            onClick={handleResumeUpload}
+                            disabled={uploadingResume}
+                            className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition text-sm disabled:opacity-50"
+                          >
+                            {uploadingResume ? 'Uploading...' : 'Upload'}
+                          </button>
+                          <button
+                            onClick={() => { setResumeFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                            className="px-3 py-2 text-slate-500 hover:text-slate-700 text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  {resumeFile && (
-                    <div className="mb-8">
-                      <button
-                        onClick={handleResumeUpload}
-                        disabled={uploadingResume}
-                        className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition disabled:opacity-50"
-                      >
-                        {uploadingResume ? 'Uploading...' : 'Upload Resume'}
-                      </button>
+                  {resume?.resumeUrl ? (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                      <iframe
+                        src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/user/resume/pdf?token=${localStorage.getItem('token')}`}
+                        title="Resume PDF"
+                        className="w-full"
+                        style={{ height: '80vh', border: 'none' }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-300 rounded-xl p-16 text-center hover:border-teal-500 hover:bg-teal-50 transition cursor-pointer"
+                    >
+                      <FaCloudUploadAlt className="text-5xl text-slate-400 mx-auto mb-4" />
+                      <h4 className="text-lg font-semibold text-slate-900 mb-2">No resume uploaded yet</h4>
+                      <p className="text-slate-500">Click here or use the button above to upload your PDF resume</p>
                     </div>
                   )}
-
-                  <div className="border border-slate-200 rounded-xl p-4 flex items-center justify-between bg-slate-50">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                        <FaFileAlt className="text-amber-700 text-xl" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-900">{resumeName}</p>
-                        <p className="text-xs text-slate-500">{resumeDate}</p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
 
