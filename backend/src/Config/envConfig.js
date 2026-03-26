@@ -1,4 +1,4 @@
-process.loadEnvFile(".env.local")
+process.loadEnvFile(".env")
 
 
 export const envConfig = {
