@@ -12,10 +12,23 @@ import { uploadPdf, cloudinary } from "../utils/cloudinary.js";
 import { SendMail } from "../utils/nodemailer.js";
 import { verifyEmail } from "../utils/templates/loginVerifyMail.js";
 import { ExtractText } from "../utils/pdf-parse.js";
-import { analyzeResumeContent } from "../utils/resumeAnalysis.js";
-import { calculateATSScore, extractSkillsFromJobDescription, detectResumeType } from "../utils/atsScoring.js";
+import { detectResumeType } from "../utils/atsScoring.js";
 import { getUserApplications } from "../services/job.service.js";
 import { inngest } from "../services/inngest/client.js";
+import { analyzeResumeWithMlApi, mapMlToDetailedAtsResult } from "../services/resumeMl.service.js";
+
+const mapMlCareersToRecommendationRows = (items = []) => {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item) => item?.role)
+    .map((item) => ({
+      careerName: String(item.role),
+      matchScore: Number((Math.max(0, Math.min(1, Number(item.confidence) || 0)) * 100).toFixed(2)),
+      matchReasons: ["Recommended by trained career model"],
+      skillGaps: [],
+      growthPotential: "medium",
+    }));
+};
 
 export const uploadResume = async (req, res) => {
   if (!req.file)
@@ -69,11 +82,33 @@ export const uploadResume = async (req, res) => {
       extractedText = await ExtractText(pdfUrl);
     }
 
-    const analysis = await analyzeResumeContent(extractedText);
+    let mlAnalysis;
+    try {
+      mlAnalysis = await analyzeResumeWithMlApi({
+        pdfBuffer: req.file.buffer,
+        filename: req.file.originalname || "resume.pdf",
+      });
+    } catch (mlError) {
+      console.error("ML API analysis failed:", mlError.message);
+      return res.status(503).json({
+        message: "ML model service is unavailable. Please try again.",
+        error: mlError.message,
+      });
+    }
 
-    resumeDoc.resumeContent = analysis.parsedResume || analysis.parsedContent;
-    resumeDoc.atsScore = analysis.atsScore;
-    resumeDoc.suggestions = analysis.suggestions;
+    const parsedResumeContent = {};
+    resumeDoc.resumeContent = {
+      ...parsedResumeContent,
+      mlAnalysis: {
+        resumeScore: mlAnalysis.resumeScore,
+        rating: mlAnalysis.rating,
+        careerRecommendations: mlAnalysis.careerRecommendations,
+        jobFitScore: mlAnalysis.jobFitScore,
+        extractedTextPreview: mlAnalysis.extractedTextPreview,
+      },
+    };
+    resumeDoc.atsScore = mlAnalysis.resumeScore;
+    resumeDoc.suggestions = mlAnalysis.improvementSuggestions || [];
     resumeDoc.analysisStatus = "completed";
     resumeDoc.analysisError = "";
     
@@ -85,12 +120,33 @@ export const uploadResume = async (req, res) => {
     
     await resumeDoc.save();
 
+    if (mlAnalysis.careerRecommendations?.length) {
+      try {
+        await Recommendation.findOneAndUpdate(
+          { userId: req.user._id },
+          {
+            $set: {
+              recommendations: mapMlCareersToRecommendationRows(mlAnalysis.careerRecommendations),
+              generatedAt: new Date(),
+              basedOn: { resumeId: resumeDoc._id },
+            },
+          },
+          { upsert: true, new: true }
+        );
+      } catch (recSaveError) {
+        console.error("Failed to save ML career recommendations:", recSaveError.message);
+      }
+    }
+
     return res.status(200).json({
       message: "Resume uploaded and analyzed successfully",
       resumeUrl: secure_url,
-      analysis: analysis.parsedResume || analysis.parsedContent,
-      atsScore: analysis.atsScore,
-      suggestions: analysis.suggestions,
+      analysis: {},
+      atsScore: resumeDoc.atsScore,
+      rating: mlAnalysis.rating || null,
+      careerRecommendations: mlAnalysis.careerRecommendations || [],
+      jobFitScore: mlAnalysis.jobFitScore ?? null,
+      suggestions: resumeDoc.suggestions,
       analysisStatus: resumeDoc.analysisStatus,
       resume_type: resumeTypeResult.type,
       resume_type_confidence: resumeTypeResult.confidence,
@@ -314,7 +370,7 @@ export const verifyUser = async (req, res) => {
 export const calculateWeightedATSScore = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { jobDescription, requiredSkills } = req.body;
+    const { jobDescription, requiredSkills = [] } = req.body;
 
     // Get user's resume
     const resume = await Resume.findOne({ userId });
@@ -326,144 +382,55 @@ export const calculateWeightedATSScore = async (req, res) => {
       });
     }
 
-    // Extract resume text
-    let resumeText = "";
-    
-    // Try to get text from stored parsed content first
-    if (resume.resumeContent) {
-      try {
-        const content = typeof resume.resumeContent === 'string' 
-          ? JSON.parse(resume.resumeContent) 
-          : resume.resumeContent;
-        
-        // Build full text from structured content
-        const parts = [];
-        
-        if (content.personalInfo) {
-          const pi = content.personalInfo;
-          parts.push(
-            pi.name || '',
-            pi.email || '',
-            pi.phone || '',
-            pi.location || '',
-            pi.linkedin || '',
-            pi.portfolio || ''
-          );
+    try {
+      const pdfResponse = await axios.get(resume.resumeUrl, {
+        responseType: "arraybuffer",
+        timeout: 30000,
+      });
+
+      const mlResult = await analyzeResumeWithMlApi({
+        pdfBuffer: Buffer.from(pdfResponse.data),
+        filename: "resume.pdf",
+        jobDescription: typeof jobDescription === "string" ? jobDescription : undefined,
+      });
+
+      const scoreResult = mapMlToDetailedAtsResult(mlResult, {
+        requiredSkillsCount: Array.isArray(requiredSkills) ? requiredSkills.length : 0,
+      });
+
+      // Save the ML-derived score
+      resume.weightedAtsScore = scoreResult.final_score;
+      resume.lastScoredAt = new Date();
+      await resume.save();
+
+      await saveScanToHistory(userId, {
+        resumeUrl: resume.resumeUrl,
+        resumePublicId: resume.resumePublicId,
+        resumeName: "Resume.pdf",
+        scanType: "detailed",
+        jobDescription: jobDescription || "",
+        detailedResults: scoreResult,
+        resumeSnapshot: resume.resumeContent
+      });
+
+      return res.status(200).json({
+        message: "ATS score calculated successfully",
+        success: true,
+        data: scoreResult,
+        metadata: {
+          resumeId: resume._id,
+          analyzedWith: jobDescription ? 'job description' : 'general assessment (ML model)',
+          totalSkillsAnalyzed: Array.isArray(requiredSkills) ? requiredSkills.length : 0,
         }
-        
-        if (content.summary) parts.push(content.summary);
-        
-        if (Array.isArray(content.experience)) {
-          content.experience.forEach(exp => {
-            parts.push(
-              exp.company || '',
-              exp.position || '',
-              exp.description || '',
-              ...(exp.achievements || [])
-            );
-          });
-        }
-        
-        if (Array.isArray(content.education)) {
-          content.education.forEach(edu => {
-            parts.push(
-              edu.institution || '',
-              edu.degree || '',
-              edu.field || ''
-            );
-          });
-        }
-        
-        if (content.skills) {
-          parts.push(
-            ...(content.skills.technical || []),
-            ...(content.skills.frameworks || []),
-            ...(content.skills.languages || []),
-            ...(content.skills.soft || [])
-          );
-        }
-        
-        if (Array.isArray(content.projects)) {
-          content.projects.forEach(proj => {
-            parts.push(
-              proj.name || '',
-              proj.description || '',
-              ...(proj.technologies || [])
-            );
-          });
-        }
-        
-        if (Array.isArray(content.certifications)) {
-          content.certifications.forEach(cert => {
-            parts.push(cert.name || '', cert.issuer || '');
-          });
-        }
-        
-        resumeText = parts.filter(Boolean).join(' ');
-      } catch (parseError) {
-        console.error('Error parsing resume content:', parseError);
-      }
+      });
+    } catch (mlError) {
+      console.error("ML API detailed score failed:", mlError.message);
+      return res.status(503).json({
+        message: "ML model service is unavailable. Please try again.",
+        error: mlError.message,
+        success: false,
+      });
     }
-    
-    // If no text extracted from structured content, try extracting from PDF
-    if (!resumeText || resumeText.length < 100) {
-      try {
-        resumeText = await ExtractText(resume.resumeUrl);
-      } catch (extractError) {
-        console.error('Error extracting text from PDF:', extractError);
-        return res.status(500).json({
-          message: "Could not extract text from resume. Please try uploading again.",
-          error: extractError.message,
-          success: false
-        });
-      }
-    }
-
-    // Determine required skills
-    let skillsList = [];
-    
-    if (Array.isArray(requiredSkills) && requiredSkills.length > 0) {
-      // Use provided skills
-      skillsList = requiredSkills.map(s => s.trim()).filter(Boolean);
-    } else if (jobDescription && typeof jobDescription === 'string') {
-      // Extract skills from job description
-      skillsList = extractSkillsFromJobDescription(jobDescription);
-    }
-
-    // Calculate weighted ATS score
-    const scoreResult = calculateATSScore(
-      resumeText,
-      skillsList,
-      resume.resumeContent
-    );
-
-    // Save the new weighted score to database (optional - add new field if needed)
-    resume.weightedAtsScore = scoreResult.final_score;
-    resume.lastScoredAt = new Date();
-    await resume.save();
-
-    // Save to scan history
-    await saveScanToHistory(userId, {
-      resumeUrl: resume.resumeUrl,
-      resumePublicId: resume.resumePublicId,
-      resumeName: "Resume.pdf",
-      scanType: "detailed",
-      jobDescription: jobDescription || "",
-      detailedResults: scoreResult,
-      resumeSnapshot: resume.resumeContent
-    });
-
-    return res.status(200).json({
-      message: "ATS score calculated successfully",
-      success: true,
-      data: scoreResult,
-      metadata: {
-        resumeId: resume._id,
-        analyzedWith: jobDescription ? 'job description' : (skillsList.length > 0 ? 'required skills' : 'general assessment'),
-        totalSkillsAnalyzed: skillsList.length,
-        resumeLength: resumeText.length
-      }
-    });
 
   } catch (error) {
     console.error("Weighted ATS scoring error:", error);

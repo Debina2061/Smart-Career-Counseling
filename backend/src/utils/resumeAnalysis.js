@@ -1,4 +1,7 @@
-import { getGroqChatCompletion } from "./groq.setup.js";
+/**
+ * Resume analysis utilities without external API dependency.
+ * All parsing and scoring is done locally using ML models.
+ */
 
 export const parseResumeJson = (content) => {
   if (!content) return null;
@@ -325,25 +328,12 @@ export const buildSuggestions = (resume, rawText) => {
 };
 
 export const analyzeResumeContent = async (extractedText) => {
-  const aiResponse = await getGroqChatCompletion(extractedText);
-  const parsedContent = aiResponse.choices[0].message.content;
-  const parsedResume = parseResumeJson(parsedContent);
-  const atsScore = calculateAtsScore(parsedResume, extractedText);
-  const suggestions = buildSuggestions(parsedResume, extractedText);
+  // NOTE: This function is deprecated. Use the ML API via resumeMl.service.js instead.
+  // ML API provides both resume parsing and scoring via the /analyze-resume endpoint.
   
-  // Get detection details for analysis metadata
-  const sectionsDetected = detectSections(extractedText);
-  const keywordAnalysis = detectCareerKeywords(extractedText, parsedResume);
-
-  return {
-    parsedContent,
-    parsedResume,
-    atsScore,
-    suggestions,
-    analysis: {
-      sectionsDetected: sectionsDetected.detected,
-      keywordMatches: keywordAnalysis.count,
-      textLength: extractedText?.length || 0
-    }
-  };
+  // For backwards compatibility, throw an informative error
+  throw new Error(
+    "analyzeResumeContent is deprecated. Use the ML API (resumeMl.service.js) via the /calculate-weighted-ats-score endpoint instead. " +
+    "This provides ML-based resume parsing, scoring, and recommendations."
+  );
 };

@@ -16,7 +16,6 @@
 //     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
 //     cloudSecret: process.env.CLOUDINARY_API_SECRET,
 //     cloudKey: process.env.CLOUDINARY_API_KEY,
-//     groqApiUrl: process.env.GROQ_SECRET_API_KEY,
 //     inngestEventKey: process.env.INNGEST_EVENT_KEY,
 //     inngestSigningKey: process.env.INNGEST_SIGNING_KEY
 // }
@@ -54,7 +53,7 @@ export const envConfig = {
     cloudSecret: process.env.CLOUDINARY_API_SECRET,
     cloudKey: process.env.CLOUDINARY_API_KEY,
 
-    groqApiUrl: process.env.GROQ_SECRET_API_KEY,
+    mlApiBaseUrl: process.env.ML_API_BASE_URL || "http://127.0.0.1:8000",
     inngestEventKey: process.env.INNGEST_EVENT_KEY,
     inngestSigningKey: process.env.INNGEST_SIGNING_KEY
 };

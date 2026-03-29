@@ -1,9 +1,26 @@
 import Groq from "groq-sdk";
 import { envConfig } from "../Config/envConfig.js";
 
-const groq = new Groq({ apiKey: envConfig.groqApiUrl });
+let groqClient = null;
+
+function getGroqClient() {
+  const apiKey = envConfig.groqApiUrl || process.env.GROQ_API_KEY || process.env.GROQ_SECRET_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "Groq API key is missing. Configure GROQ_SECRET_API_KEY (or GROQ_API_KEY) to enable AI features."
+    );
+  }
+
+  if (!groqClient) {
+    groqClient = new Groq({ apiKey });
+  }
+
+  return groqClient;
+}
 
 export async function getGroqChatCompletion(resumeText) {
+  const groq = getGroqClient();
   return await groq.chat.completions.create({
     messages: [
       {
@@ -26,6 +43,7 @@ export async function getGroqChatCompletion(resumeText) {
 }
 
 export async function getCareerRecommendationAI(userProfile, topCareers) {
+  const groq = getGroqClient();
   const prompt = `You are a career counselor AI. Based on the user's profile and top matching careers, provide personalized insights.
 
 USER PROFILE:
@@ -68,6 +86,7 @@ Rules:
 }
 
 export async function getJobMatchAnalysis(resumeData, jobRequirements) {
+  const groq = getGroqClient();
   const prompt = `Analyze how well this candidate matches the job requirements.
 
 CANDIDATE SKILLS:

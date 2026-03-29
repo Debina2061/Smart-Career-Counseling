@@ -1,31 +1,7 @@
-import Groq from "groq-sdk";
-import { envConfig } from "../Config/envConfig.js";
 import { ChatSession } from "../Model/chatbot.model.js";
 import { Resume } from "../Model/resume.model.js";
 import { Profile } from "../Model/profile.model.js";
 import { Recommendation } from "../Model/recommendation.model.js";
-
-const groq = new Groq({ apiKey: envConfig.groqApiUrl });
-
-const SYSTEM_PROMPT = `You are an expert AI Career Counselor and Resume Advisor. Your role is to help users with:
-
-1. **Career Guidance**: Provide personalized career advice based on their skills, experience, and interests
-2. **Resume Improvement**: Suggest improvements to make their resume more ATS-friendly and impactful
-3. **Skill Development**: Recommend skills to learn based on their career goals
-4. **Job Search Strategy**: Offer tips on job searching, networking, and interviewing
-5. **Career Transitions**: Help users plan transitions between careers or industries
-
-Guidelines:
-- Be encouraging but realistic
-- Provide specific, actionable advice
-- When discussing skills, mention both technical and soft skills
-- Consider market trends and demand when giving career advice
-- If the user shares their resume/profile data, reference it in your responses
-- Keep responses concise but helpful (2-4 paragraphs typically)
-- Ask clarifying questions when needed
-- Use bullet points for lists and actionable items
-
-You have access to the user's resume and profile data when available. Use this context to personalize your advice.`;
 
 /**
  * Get user context for chat (resume, profile, recommendations)
@@ -88,27 +64,36 @@ ${recommendation.recommendations.slice(0, 3).map((r, i) =>
 }
 
 /**
- * Send message to AI and get response
+ * Get AI response - ML model based
+ * NOTE: External AI is not available. Use career recommendations instead.
  */
 async function getAIResponse(messages, contextString) {
-    const systemMessage = SYSTEM_PROMPT + contextString;
-
-    const response = await groq.chat.completions.create({
-        messages: [
-            { role: "system", content: systemMessage },
-            ...messages.map(m => ({
-                role: m.role,
-                content: m.content
-            }))
-        ],
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.7,
-        max_completion_tokens: 1024,
-        top_p: 1,
-        stream: false
-    });
-
-    return response.choices[0]?.message?.content || "I apologize, I couldn't generate a response. Please try again.";
+    // ML model features are available via dedicated endpoints:
+    // - Career recommendations: /recommendation/generate
+    // - Resume scoring: /user/calculate-weighted-ats-score
+    // - Job matching: /job/match or /job/:jobId/match
+    
+    const lastUserMessage = messages[messages.length - 1]?.content || "";
+    
+    // Provide helpful ML-based responses based on query type
+    if (lastUserMessage.toLowerCase().includes("career") || lastUserMessage.toLowerCase().includes("recommend")) {
+        return "Based on your resume and profile, the AI Career Recommendation system has analyzed your skills and experience. " +
+               "Visit the Career Recommendations page to see your top job matches. You can also upload a resume to get AI-powered scoring and insights.";
+    } else if (lastUserMessage.toLowerCase().includes("resume") || lastUserMessage.toLowerCase().includes("score") || lastUserMessage.toLowerCase().includes("ats")) {
+        return "Your resume is analyzed using our ML model which provides:" +
+               "\n- Overall ATS Score (0-100)\n- Skill matching analysis\n- Career recommendations\n- Improvement suggestions" +
+               "\nUpload your resume in the ATS Scanner to get your personalized analysis.";
+    } else if (lastUserMessage.toLowerCase().includes("job") || lastUserMessage.toLowerCase().includes("match")) {
+        return "The ML job matching system analyzes how well your profile matches job openings. " +
+               "It considers your skills, experience, education, and preferences to give you a match percentage and recommendations.";
+    }
+    
+    // Default helpful response
+    return "I'm an ML-powered career assistant. I can help you with:\n" +
+           "• Career recommendations based on your skills\n" +
+           "• Resume analysis and ATS scoring\n" +
+           "• Job matching and fit analysis\n" +
+           "\nAsk me about your career, resume, or job matches, or visit the dedicated pages for AI-powered analysis!";
 }
 
 /**

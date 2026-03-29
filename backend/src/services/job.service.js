@@ -1,7 +1,6 @@
 import { Job } from "../Model/job.model.js";
 import { Resume } from "../Model/resume.model.js";
 import { Profile } from "../Model/profile.model.js";
-import { getJobMatchAnalysis } from "../utils/groq.setup.js";
 
 // Weights for job matching
 const WEIGHTS = {
@@ -268,19 +267,47 @@ export async function getAIJobMatch(userId, jobId) {
         ? JSON.parse(resume.resumeContent)
         : resume.resumeContent;
     
-    const aiResponse = await getJobMatchAnalysis(resumeData, {
-        jobTitle: job.jobTitle,
-        requiredSkills: job.requiredSkills?.technical || [],
-        experience: `${job.experienceYears?.min || 0}-${job.experienceYears?.max || 'any'} years`,
-        workType: job.workType
-    });
+    // Use local scoring (ML model already provided this via matchUserToJobs)
+    // For detailed analysis, use matchUserToJobs and filter by jobId
+    const userExperience = Array.isArray(resumeData.experience) ? resumeData.experience : [];
+    const userEducation = Array.isArray(resumeData.education) ? resumeData.education : [];
+    const userSkills = [
+        ...(Array.isArray(resumeData.skills?.technical) ? resumeData.skills.technical : []),
+        ...(Array.isArray(resumeData.skills?.frameworks) ? resumeData.skills.frameworks : [])
+    ];
     
-    let analysis;
-    try {
-        analysis = JSON.parse(aiResponse.choices[0]?.message?.content || "{}");
-    } catch {
-        analysis = { error: "Could not parse AI response" };
-    }
+    // Calculate match using local scoring
+    const skillMatch = calculateSkillMatch(userSkills, job.requiredSkills?.technical || []);
+    const experienceMatch = calculateExperienceMatch(userExperience, job);
+    const educationMatch = calculateEducationMatch(userEducation, resume.educationLevel || "secondary", job);
+    const preferenceMatch = calculatePreferenceMatch({ educationLevel: resume.educationLevel }, job);
+    
+    const analysis = {
+        matchPercentage: Math.round(
+            (skillMatch * WEIGHTS.technicalSkills) +
+            (experienceMatch * WEIGHTS.experience) +
+            (educationMatch * WEIGHTS.education) +
+            (preferenceMatch * WEIGHTS.preferences)
+        ),
+        skills: {
+            matched: findMatchedSkills(userSkills, job.requiredSkills?.technical || []),
+            missing: findMissingSkills(userSkills, job.requiredSkills?.technical || [])
+        },
+        strengths: [
+            skillMatch >= 70 ? `Strong technical skill alignment (${skillMatch}%)` : null,
+            experienceMatch >= 80 ? `Experience level matches job requirements` : null,
+            educationMatch >= 80 ? `Education background aligns with position` : null
+        ].filter(Boolean),
+        gaps: [
+            skillMatch < 50 ? `Missing key technical skills` : null,
+            experienceMatch < 60 ? `Experience level may be below requirements` : null,
+            educationMatch < 60 ? `Education level may not meet requirements` : null
+        ].filter(Boolean),
+        recommendation: matchPercentage >= 75 ? "Strong match - Apply now"
+            : matchPercentage >= 60 ? "Good match - Worth applying"
+            : matchPercentage >= 45 ? "Moderate match - Consider applying"
+            : "Low match - Build skills first"
+    };
     
     return {
         job: {
@@ -288,7 +315,7 @@ export async function getAIJobMatch(userId, jobId) {
             jobTitle: job.jobTitle,
             company: job.company
         },
-        aiAnalysis: analysis
+        mlAnalysis: analysis
     };
 }
 

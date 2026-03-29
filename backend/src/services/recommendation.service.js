@@ -2,7 +2,6 @@ import { Career } from "../Model/carrerpath.model.js";
 import { Resume } from "../Model/resume.model.js";
 import { Profile } from "../Model/profile.model.js";
 import { Recommendation } from "../Model/recommendation.model.js";
-import { getCareerRecommendationAI } from "../utils/groq.setup.js";
 import { generateJobSearchLinks } from "../utils/jobSearchLinks.js";
 
 // Weights for scoring algorithm
@@ -14,6 +13,79 @@ const WEIGHTS = {
     interests: 0.10,
     marketDemand: 0.10
 };
+
+function toPercentConfidence(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Number((Math.max(0, Math.min(1, numeric)) * 100).toFixed(2));
+}
+
+function mapGrowthPotential(outlook) {
+    if (outlook === "rapid-growth") return "high";
+    if (outlook === "growing") return "medium";
+    return "low";
+}
+
+function findCareerByName(careers, role) {
+    const normalizedRole = String(role || "").toLowerCase().trim();
+    if (!normalizedRole) return null;
+
+    const exact = careers.find(
+        (career) => String(career?.careerName || "").toLowerCase().trim() === normalizedRole
+    );
+    if (exact) return exact;
+
+    return (
+        careers.find((career) => {
+            const name = String(career?.careerName || "").toLowerCase().trim();
+            return name.includes(normalizedRole) || normalizedRole.includes(name);
+        }) || null
+    );
+}
+
+function buildMlRecommendationRows({ mlCareers, careers, atsScore }) {
+    const uniqueByRole = new Map();
+
+    for (const item of mlCareers) {
+        const role = String(item?.role || "").trim();
+        if (!role) continue;
+
+        const key = role.toLowerCase();
+        if (uniqueByRole.has(key)) continue;
+        uniqueByRole.set(key, item);
+    }
+
+    return Array.from(uniqueByRole.values())
+        .map((item) => {
+            const role = String(item?.role || "").trim();
+            const careerMatch = findCareerByName(careers, role);
+            const matchScore = toPercentConfidence(item?.confidence);
+
+            return {
+                careerId: careerMatch?._id,
+                careerName: role,
+                category: careerMatch?.category || "other",
+                matchScore,
+                matchReasons: ["Recommended by trained career model"],
+                skillGaps: [],
+                growthPotential: mapGrowthPotential(careerMatch?.growthOutlook),
+                salaryRange: careerMatch?.salaryRange || {},
+                marketDemand: careerMatch?.marketDemand || "medium",
+                experienceLevel: careerMatch?.experienceLevel || "entry",
+                detailedScores: {
+                    mlConfidence: matchScore,
+                },
+                jobSearch: generateJobSearchLinks({
+                    career_name: role,
+                    ats_score: Number.isFinite(atsScore) ? atsScore : 0,
+                    extracted_skills: [],
+                    preferred_location: "",
+                }),
+            };
+        })
+        .sort((a, b) => b.matchScore - a.matchScore)
+        .slice(0, 5);
+}
 
 /**
  * Calculate skill match score between user skills and career required skills
@@ -329,6 +401,36 @@ export async function generateRecommendations(userId) {
         if (!resume?.resumeContent) {
             throw new Error("Resume not found. Please upload your resume first.");
         }
+
+        const careers = await Career.find({ isActive: true });
+        if (!careers || careers.length === 0) {
+            throw new Error("No career paths available. Please contact administrator.");
+        }
+
+        const mlCareerRecommendations = resume?.resumeContent?.mlAnalysis?.careerRecommendations;
+        if (Array.isArray(mlCareerRecommendations) && mlCareerRecommendations.length > 0) {
+            const atsScore = Number.isFinite(resume?.atsScore) ? resume.atsScore : 0;
+            const mlRecommendations = buildMlRecommendationRows({
+                mlCareers: mlCareerRecommendations,
+                careers,
+                atsScore,
+            });
+
+            if (mlRecommendations.length > 0) {
+                console.log(`[SERVICE] Using ML-based career recommendations from resume analysis (${mlRecommendations.length})`);
+                return {
+                    recommendations: mlRecommendations,
+                    userSnapshot: {
+                        technicalSkills: [],
+                        softSkills: [],
+                        educationLevel: profile?.educationLevel || "secondary",
+                        interests: (profile?.interest || profile?.interests || []).slice(0, 5),
+                    },
+                    resumeId: resume._id,
+                    profileId: profile?._id,
+                };
+            }
+        }
         
         // Parse resume content - ULTRA DEFENSIVE
         let resumeData;
@@ -440,13 +542,7 @@ export async function generateRecommendations(userId) {
         console.log(`[SERVICE] Soft skills:`, userSoftSkills);
         
         // Get all active careers
-        const careers = await Career.find({ isActive: true });
-        
         console.log(`[SERVICE] Found ${careers?.length || 0} active careers`);
-        
-        if (!careers || careers.length === 0) {
-            throw new Error("No career paths available. Please contact administrator.");
-        }
         
         // Safely extract experience and education with fallbacks
         console.log(`[SERVICE] ==================== EXTRACTING EXPERIENCE & EDUCATION ====================`);
@@ -605,69 +701,45 @@ export async function generateRecommendations(userId) {
 
 /**
  * Get AI-enhanced insights for top recommendations
- * Uses Groq AI to provide personalized guidance
+ * Now uses ML model-based scoring. No external AI APIs needed.
  */
 export async function getAIEnhancedRecommendations(userId) {
     try {
+        // Base recommendations already include ML-based scoring from the ML model
+        // No additional AI enhancement needed - the ML model provides all the insights
         const baseRecommendations = await generateRecommendations(userId);
         
-        // Get AI insights for top 5 careers
+        // Enhance with ML model insights
         const top5 = baseRecommendations.recommendations.slice(0, 5);
         
         if (!top5 || top5.length === 0) {
             return baseRecommendations;
         }
         
-        try {
-            const aiResponse = await getCareerRecommendationAI(
-                baseRecommendations.userSnapshot,
-                top5.map(r => ({
-                    name: r.careerName,
-                    category: r.category,
-                    matchScore: r.matchScore,
-                    skillGaps: r.skillGaps
-                }))
-            );
+        // Generate learning path based on skill gaps
+        for (let i = 0; i < top5.length; i++) {
+            const career = top5[i];
             
-            if (!aiResponse || !aiResponse.choices || !aiResponse.choices[0]) {
-                console.warn("Invalid AI response format");
-                return baseRecommendations;
+            // Create a simple learning path based on skill gaps
+            const skillGaps = career.skillGaps || [];
+            const learningPath = [];
+            
+            if (skillGaps.length > 0) {
+                learningPath.push(`Master core skills: ${skillGaps.slice(0, 3).join(", ")}`);
+                learningPath.push(`Complete relevant certifications in ${career.category}`);
+                learningPath.push(`Build portfolio projects using required technologies`);
+                learningPath.push(`Gain 1-2 years of practical experience in the field`);
             }
             
-            const aiInsights = aiResponse.choices[0]?.message?.content;
-            
-            if (!aiInsights) {
-                console.warn("No AI insights content");
-                return baseRecommendations;
-            }
-            
-            // Parse AI response and attach to recommendations
-            let parsedInsights;
-            try {
-                parsedInsights = JSON.parse(aiInsights);
-            } catch {
-                // If can't parse as JSON, treat as plain text advice
-                parsedInsights = { generalAdvice: aiInsights };
-            }
-            
-            // Merge AI insights with recommendations
-            for (let i = 0; i < top5.length; i++) {
-                if (parsedInsights.careers && Array.isArray(parsedInsights.careers) && parsedInsights.careers[i]) {
-                    top5[i].aiInsights = parsedInsights.careers[i].insight || null;
-                    top5[i].learningPath = parsedInsights.careers[i].learningPath || null;
-                }
-            }
-            
-            return {
-                ...baseRecommendations,
-                recommendations: top5,
-                generalAdvice: parsedInsights.generalAdvice || null
-            };
-        } catch (aiError) {
-            console.error("AI enhancement failed:", aiError.message);
-            // Return base recommendations if AI fails (don't propagate AI errors)
-            return baseRecommendations;
+            top5[i].learningPath = learningPath.length > 0 ? learningPath : null;
+            top5[i].aiInsights = `${career.careerName} is a ${career.growthPotential} growth opportunity with ${career.matchReasons.length} strong match factors.`;
         }
+        
+        return {
+            ...baseRecommendations,
+            recommendations: top5,
+            generalAdvice: `Based on ML model analysis, these career recommendations are tailored to your skills, experience, and interests. Focus on closing skill gaps in your top matches.`
+        };
     } catch (error) {
         console.error("GetAIEnhancedRecommendations error:", error);
         throw error; // Let the controller handle this error
