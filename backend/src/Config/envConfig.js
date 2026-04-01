@@ -54,6 +54,8 @@ export const envConfig = {
     cloudKey: process.env.CLOUDINARY_API_KEY,
 
     mlApiBaseUrl: process.env.ML_API_BASE_URL || "http://127.0.0.1:8000",
+    groqApiKey: process.env.GROQ_API_KEY || process.env.GROQ_SECRET_API_KEY,
+    groqModel: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
     inngestEventKey: process.env.INNGEST_EVENT_KEY,
     inngestSigningKey: process.env.INNGEST_SIGNING_KEY
 };

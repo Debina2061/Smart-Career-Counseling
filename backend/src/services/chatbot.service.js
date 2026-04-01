@@ -2,6 +2,52 @@ import { ChatSession } from "../Model/chatbot.model.js";
 import { Resume } from "../Model/resume.model.js";
 import { Profile } from "../Model/profile.model.js";
 import { Recommendation } from "../Model/recommendation.model.js";
+import { getCareerChatResponse } from "../utils/groq.setup.js";
+
+function normalizeResumeData(resumeContent) {
+    if (!resumeContent) return null;
+
+    let parsed = resumeContent;
+    if (typeof resumeContent === "string") {
+        try {
+            parsed = JSON.parse(resumeContent);
+        } catch {
+            return null;
+        }
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+        return null;
+    }
+
+    if (parsed.analysis && typeof parsed.analysis === "object") return parsed.analysis;
+    if (parsed.parsedResume && typeof parsed.parsedResume === "object") return parsed.parsedResume;
+    if (parsed.resumeData && typeof parsed.resumeData === "object") return parsed.resumeData;
+    return parsed;
+}
+
+function asStringList(value) {
+    if (!Array.isArray(value)) return [];
+    return value.filter((item) => typeof item === "string" && item.trim().length > 0);
+}
+
+function getFallbackResponse(lastUserMessage) {
+    const prompt = (lastUserMessage || "").toLowerCase();
+
+    if (prompt.includes("career") || prompt.includes("recommend")) {
+        return "I am having trouble reaching the live AI service right now. Meanwhile, open Career Recommendation to view your latest career matches and skill-gap insights.";
+    }
+
+    if (prompt.includes("resume") || prompt.includes("score") || prompt.includes("ats")) {
+        return "I am having trouble reaching the live AI service right now. You can still use ATS Resume Scanner to get your score, strengths, and actionable improvements.";
+    }
+
+    if (prompt.includes("job") || prompt.includes("match")) {
+        return "I am having trouble reaching the live AI service right now. You can still use Job Matching to check fit percentage and improvement suggestions for roles.";
+    }
+
+    return "I am having trouble reaching the live AI service right now. Please try again in a moment.";
+}
 
 /**
  * Get user context for chat (resume, profile, recommendations)
@@ -23,22 +69,22 @@ async function getUserContext(userId) {
     let contextString = "";
 
     if (resume?.resumeContent) {
-        context.hasResume = true;
-        const resumeData = typeof resume.resumeContent === "string"
-            ? JSON.parse(resume.resumeContent)
-            : resume.resumeContent;
+        const resumeData = normalizeResumeData(resume.resumeContent);
+        if (resumeData) {
+            context.hasResume = true;
 
-        context.userSkills = [
-            ...(resumeData.skills?.technical || []),
-            ...(resumeData.skills?.frameworks || [])
-        ].slice(0, 15);
+            const technicalSkills = asStringList(resumeData.skills?.technical);
+            const frameworkSkills = asStringList(resumeData.skills?.frameworks);
 
-        contextString += `\n\nUSER'S RESUME DATA:
-- Technical Skills: ${resumeData.skills?.technical?.join(", ") || "Not specified"}
-- Frameworks: ${resumeData.skills?.frameworks?.join(", ") || "Not specified"}
-- Experience: ${resumeData.experience?.length || 0} positions
-- Education: ${resumeData.education?.map(e => `${e.degree} in ${e.field}`).join(", ") || "Not specified"}
-- Projects: ${resumeData.projects?.length || 0} projects`;
+            context.userSkills = [...technicalSkills, ...frameworkSkills].slice(0, 15);
+
+            contextString += `\n\nUSER'S RESUME DATA:
+- Technical Skills: ${technicalSkills.join(", ") || "Not specified"}
+- Frameworks: ${frameworkSkills.join(", ") || "Not specified"}
+- Experience: ${Array.isArray(resumeData.experience) ? resumeData.experience.length : 0} positions
+- Education: ${Array.isArray(resumeData.education) ? resumeData.education.map((e) => `${e?.degree || "Degree"} in ${e?.field || "field"}`).join(", ") : "Not specified"}
+- Projects: ${Array.isArray(resumeData.projects) ? resumeData.projects.length : 0} projects`;
+        }
     }
 
     if (profile) {
@@ -64,36 +110,32 @@ ${recommendation.recommendations.slice(0, 3).map((r, i) =>
 }
 
 /**
- * Get AI response - ML model based
- * NOTE: External AI is not available. Use career recommendations instead.
+ * Get AI response from Groq with fallback when unavailable
  */
 async function getAIResponse(messages, contextString) {
-    // ML model features are available via dedicated endpoints:
-    // - Career recommendations: /recommendation/generate
-    // - Resume scoring: /user/calculate-weighted-ats-score
-    // - Job matching: /job/match or /job/:jobId/match
-    
-    const lastUserMessage = messages[messages.length - 1]?.content || "";
-    
-    // Provide helpful ML-based responses based on query type
-    if (lastUserMessage.toLowerCase().includes("career") || lastUserMessage.toLowerCase().includes("recommend")) {
-        return "Based on your resume and profile, the AI Career Recommendation system has analyzed your skills and experience. " +
-               "Visit the Career Recommendations page to see your top job matches. You can also upload a resume to get AI-powered scoring and insights.";
-    } else if (lastUserMessage.toLowerCase().includes("resume") || lastUserMessage.toLowerCase().includes("score") || lastUserMessage.toLowerCase().includes("ats")) {
-        return "Your resume is analyzed using our ML model which provides:" +
-               "\n- Overall ATS Score (0-100)\n- Skill matching analysis\n- Career recommendations\n- Improvement suggestions" +
-               "\nUpload your resume in the ATS Scanner to get your personalized analysis.";
-    } else if (lastUserMessage.toLowerCase().includes("job") || lastUserMessage.toLowerCase().includes("match")) {
-        return "The ML job matching system analyzes how well your profile matches job openings. " +
-               "It considers your skills, experience, education, and preferences to give you a match percentage and recommendations.";
+    const chatMessages = Array.isArray(messages)
+        ? messages
+            .filter(
+                (m) =>
+                    m &&
+                    (m.role === "user" || m.role === "assistant") &&
+                    typeof m.content === "string" &&
+                    m.content.trim().length > 0
+            )
+            .slice(-12)
+            .map((m) => ({ role: m.role, content: m.content.trim() }))
+        : [];
+
+    const lastUserMessage = [...chatMessages]
+        .reverse()
+        .find((m) => m.role === "user")?.content;
+
+    try {
+        return await getCareerChatResponse(chatMessages, contextString);
+    } catch (error) {
+        console.error("[CHATBOT] Groq response error:", error?.message || error);
+        return getFallbackResponse(lastUserMessage || "");
     }
-    
-    // Default helpful response
-    return "I'm an ML-powered career assistant. I can help you with:\n" +
-           "• Career recommendations based on your skills\n" +
-           "• Resume analysis and ATS scoring\n" +
-           "• Job matching and fit analysis\n" +
-           "\nAsk me about your career, resume, or job matches, or visit the dedicated pages for AI-powered analysis!";
 }
 
 /**

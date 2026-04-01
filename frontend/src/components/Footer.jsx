@@ -1,45 +1,92 @@
-import React from "react";
+import { FaGithub, FaInstagram, FaLinkedinIn } from "react-icons/fa";
+import { Link } from "react-router-dom";
 
-function Footeer() {
+const quickLinks = [
+  { label: "Features", href: "#features" },
+  { label: "How It Works", href: "#process" },
+  { label: "Outcomes", href: "#outcomes" },
+];
+
+const accountLinks = [
+  { label: "Get Started", to: "/getstarted" },
+  { label: "Sign Up", to: "/signup" },
+  { label: "Sign In", to: "/signin" },
+];
+
+const socialLinks = [
+  { label: "Instagram", href: "https://www.instagram.com/", icon: FaInstagram },
+  { label: "LinkedIn", href: "https://www.linkedin.com/", icon: FaLinkedinIn },
+  { label: "GitHub", href: "https://github.com/", icon: FaGithub },
+];
+
+function Footer() {
   return (
-    <footer className="bg-gray-900 text-gray-300 px-6 md:px-12 py-12 md:py-16 border-t border-gray-800">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+    <footer className="bg-[#0f243d] text-slate-200">
+      <div className="landing-container py-16">
+        <div className="grid gap-10 border-b border-[#1d3655] pb-10 lg:grid-cols-[1.25fr_0.75fr_0.75fr_1fr]">
           <div>
-            <h3 className="text-white font-bold mb-4">Smart Career</h3>
-            <p className="text-sm text-gray-400">Empowering students with AI-powered career guidance.</p>
+            <p className="landing-display text-2xl font-bold text-white">Smart Career</p>
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-300">
+              Practical, AI-powered career planning for students and fresh graduates ready to
+              move from uncertainty to clear action.
+            </p>
           </div>
+
           <div>
-            <h4 className="text-white font-semibold mb-4">Company</h4>
-            <ul className="space-y-2 text-sm">
-              <li><span className="hover:text-white cursor-pointer transition">About Us</span></li>
-              <li><span className="hover:text-white cursor-pointer transition">Careers</span></li>
-              <li><span className="hover:text-white cursor-pointer transition">Blog</span></li>
+            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">Product</h4>
+            <ul className="mt-4 space-y-3 text-sm">
+              {quickLinks.map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="transition hover:text-white">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
+
           <div>
-            <h4 className="text-white font-semibold mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm">
-              <li><span className="hover:text-white cursor-pointer transition">Privacy</span></li>
-              <li><span className="hover:text-white cursor-pointer transition">Terms of Service</span></li>
-              <li><span className="hover:text-white cursor-pointer transition">Cookie Policy</span></li>
+            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">Account</h4>
+            <ul className="mt-4 space-y-3 text-sm">
+              {accountLinks.map((link) => (
+                <li key={link.label}>
+                  <Link to={link.to} className="transition hover:text-white">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
+
           <div>
-            <h4 className="text-white font-semibold mb-4">Connect</h4>
-            <div className="flex gap-4">
-              <a href="https://www.instagram.com/" className="text-gray-400 hover:text-white transition">Instagram</a>
-              <a href="https://www.linkedin.com/" className="text-gray-400 hover:text-white transition">LinkedIn</a>
-              <a href="https://github.com/" className="text-gray-400 hover:text-white transition">GitHub</a>
+            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">Connect</h4>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {socialLinks.map((social) => {
+                const Icon = social.icon;
+
+                return (
+                  <a
+                    key={social.label}
+                    href={social.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-xl border border-[#1d3655] bg-[#132b46] px-3 py-2 text-sm transition hover:border-[#2e79ba] hover:text-white"
+                  >
+                    <Icon className="text-[#77b5f5]" />
+                    <span>{social.label}</span>
+                  </a>
+                );
+              })}
             </div>
           </div>
         </div>
-        <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row justify-between items-center">
-          <p className="text-sm text-gray-400">© 2024 Smart Career. All rights reserved.</p>
+
+        <div className="pt-6 text-sm text-slate-400">
+          <p>(c) {new Date().getFullYear()} Smart Career. All rights reserved.</p>
         </div>
       </div>
     </footer>
   );
 }
 
-export default Footeer;
+export default Footer;

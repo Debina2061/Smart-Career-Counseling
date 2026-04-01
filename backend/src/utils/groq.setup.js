@@ -3,8 +3,12 @@ import { envConfig } from "../Config/envConfig.js";
 
 let groqClient = null;
 
+function getGroqModel() {
+  return envConfig.groqModel || process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+}
+
 function getGroqClient() {
-  const apiKey = envConfig.groqApiUrl || process.env.GROQ_API_KEY || process.env.GROQ_SECRET_API_KEY;
+  const apiKey = envConfig.groqApiKey || process.env.GROQ_API_KEY || process.env.GROQ_SECRET_API_KEY;
 
   if (!apiKey) {
     throw new Error(
@@ -17,6 +21,63 @@ function getGroqClient() {
   }
 
   return groqClient;
+}
+
+function sanitizeChatMessages(messages = []) {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .filter(
+      (message) =>
+        message &&
+        (message.role === "user" || message.role === "assistant") &&
+        typeof message.content === "string" &&
+        message.content.trim().length > 0
+    )
+    .slice(-12)
+    .map((message) => ({ role: message.role, content: message.content.trim() }));
+}
+
+export async function getCareerChatResponse(messages, userContext = "") {
+  const groq = getGroqClient();
+  const chatMessages = sanitizeChatMessages(messages);
+
+  const systemPrompt = `You are Smart Career's AI chatbot.
+
+Goals:
+- Answer naturally and directly.
+- Give practical guidance for careers, resume quality, interview prep, and job strategy.
+- Use markdown when it improves readability.
+- If user asks something unrelated, answer briefly and offer a career-focused follow-up.
+- Never output JSON unless the user explicitly asks for it.
+- Avoid repetitive boilerplate responses.`;
+
+  const contextPrompt = userContext?.trim()
+    ? `\n\nKNOWN USER CONTEXT (may be incomplete; do not invent missing facts):${userContext}`
+    : "\n\nKNOWN USER CONTEXT: none available yet.";
+
+  const completion = await groq.chat.completions.create({
+    messages: [
+      {
+        role: "system",
+        content: `${systemPrompt}${contextPrompt}`,
+      },
+      ...chatMessages,
+    ],
+    model: getGroqModel(),
+    temperature: 0.6,
+    max_completion_tokens: 1024,
+    top_p: 1,
+    stream: false,
+  });
+
+  const content = completion?.choices?.[0]?.message?.content?.trim();
+
+  if (!content) {
+    throw new Error("Groq returned an empty chatbot response");
+  }
+
+  return content;
 }
 
 export async function getGroqChatCompletion(resumeText) {
@@ -33,7 +94,7 @@ export async function getGroqChatCompletion(resumeText) {
         content: resumeText 
     },
     ],
-    model: "llama-3.3-70b-versatile",
+    model: getGroqModel(),
     temperature: 0.3,
     max_completion_tokens: 4096,
     top_p: 1,
@@ -77,7 +138,7 @@ Rules:
       { role: "system", content: "You are an expert career counselor. Respond only with valid JSON." },
       { role: "user", content: prompt }
     ],
-    model: "llama-3.3-70b-versatile",
+    model: getGroqModel(),
     temperature: 0.7,
     max_completion_tokens: 2048,
     top_p: 1,
@@ -114,7 +175,7 @@ Respond with JSON:
       { role: "system", content: "You are an ATS job matching expert. Respond only with valid JSON." },
       { role: "user", content: prompt }
     ],
-    model: "llama-3.3-70b-versatile",
+    model: getGroqModel(),
     temperature: 0.5,
     max_completion_tokens: 1024,
     top_p: 1,

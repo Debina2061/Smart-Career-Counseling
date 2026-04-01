@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import { careerAPI, resumeAPI } from '../utils/api'
 
+const isValidObjectId = (value) => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
+
 function CareerRecommendation() {
   const { user } = useAuth();
   const location = useLocation();
@@ -115,7 +117,11 @@ function CareerRecommendation() {
       const recommendations = recommendationDoc?.recommendations || [];
 
       const formattedCareers = recommendations.map((career, index) => {
-        const careerId = career?.careerId?._id || career?.careerId || career?._id;
+        const rawCareerId = career?.careerId?._id ?? career?.careerId ?? null;
+        const normalizedCareerId = typeof rawCareerId === 'string'
+          ? rawCareerId
+          : rawCareerId?.toString?.() || null;
+        const careerId = isValidObjectId(normalizedCareerId) ? normalizedCareerId : null;
         const careerName = career?.careerName || career?.name || career?.careerId?.careerName;
         const category = career?.category || career?.careerId?.category || 'General';
 
@@ -203,9 +209,20 @@ function CareerRecommendation() {
   };
 
   const handleViewDetails = async (career) => {
-    if (!career?.careerId) {
-      setDetailsError('Missing career details. Please refresh and try again.');
+    if (!isValidObjectId(career?.careerId)) {
       setDetailsOpen(true);
+      setDetailsLoading(false);
+      setDetailsError('');
+      setDetailsCareer({
+        careerName: career?.title || 'Career Details',
+        category: career?.category || 'General',
+        description: career?.description || 'Full career details are not available for this recommendation yet.',
+        matchScore: career?.matchScore || 0,
+        skillGaps: Array.isArray(career?.skillGaps) ? career.skillGaps : [],
+        growthPotential: career?.growthPotential || 'medium',
+        jobSearch: career?.jobSearch || null,
+        isFallbackDetails: true
+      });
       return;
     }
 
@@ -433,6 +450,12 @@ function CareerRecommendation() {
 
             {!detailsLoading && detailsCareer && (
               <div className="space-y-4">
+                {detailsCareer.isFallbackDetails && (
+                  <div className="bg-amber-50 text-amber-800 px-4 py-3 rounded-lg text-sm">
+                    Showing recommendation-based details. Full career catalog details are not available for this item yet.
+                  </div>
+                )}
+
                 <div className="flex gap-6 text-sm text-gray-600">
                   <span>Category: <strong className="text-gray-900">{detailsCareer.category || 'General'}</strong></span>
                   <span>Match: <strong className="text-gray-900">{detailsCareer.matchScore || 0}%</strong></span>

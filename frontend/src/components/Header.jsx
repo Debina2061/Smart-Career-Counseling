@@ -1,32 +1,50 @@
-import React from "react";
 import { Link } from "react-router-dom";
+
+const navLinks = [
+  { label: "Features", href: "#features" },
+  { label: "How It Works", href: "#process" },
+  { label: "Outcomes", href: "#outcomes" },
+];
+
 function Header() {
   return (
-    <>
-      <header className="bg-white text-gray-900 flex items-center justify-between px-6 md:px-12 py-5 border-b border-gray-200 sticky top-0 z-40">
-        {/* Logo */}
-        <h2 className="text-xl font-bold tracking-tight">
-          Smart <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">Career</span>
-        </h2>
+    <header className="landing-header sticky top-0 z-50">
+      <div className="landing-container flex h-16 items-center justify-between sm:h-20">
+        <Link to="/" className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#155b9a] text-sm font-extrabold text-white">
+            SC
+          </span>
+          <span className="landing-display text-lg font-bold tracking-tight text-[#112845] sm:text-xl">Smart Career</span>
+        </Link>
 
-        <div className="flex items-center gap-4">
+        <nav className="hidden items-center gap-8 lg:flex">
+          {navLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className="text-sm font-semibold text-[#425471] transition hover:text-[#112845]"
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link
-            to={"/signin"}
-            className="px-5 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
+            to="/signin"
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-[#425471] transition hover:border-slate-400 hover:bg-slate-50 sm:px-4 sm:text-sm"
           >
             Sign In
           </Link>
           <Link
-            to={"/signup"}
-            className="px-5 py-2 rounded-lg text-sm text-white font-medium
-            bg-gradient-to-r from-purple-600 to-indigo-600
-            hover:shadow-lg transition"
+            to="/signup"
+            className="rounded-xl bg-[#155b9a] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#124b80] sm:px-5 sm:text-sm"
           >
-            Sign Up
+            Start Free
           </Link>
         </div>
-      </header>
-    </>
+      </div>
+    </header>
   );
 }
 

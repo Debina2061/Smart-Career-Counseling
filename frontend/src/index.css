@@ -1,10 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Manrope:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Manrope:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @plugin "daisyui";
 
 :root {
   --font-sans: 'Manrope', sans-serif;
   --font-serif: 'Fraunces', serif;
+  --font-landing: 'Plus Jakarta Sans', sans-serif;
+  --landing-bg: #f4f7fb;
+  --landing-surface: #ffffff;
+  --landing-line: #d7dfeb;
+  --landing-title: #112845;
+  --landing-text: #425471;
+  --landing-muted: #64748b;
+  --landing-primary: #155b9a;
+  --landing-primary-dark: #124b80;
+  --landing-max-width: 1380px;
+  --landing-gutter: clamp(1rem, 3.2vw, 3.5rem);
 }
 
 body {
@@ -13,6 +24,94 @@ body {
 
 h1, h2, h3, h4 {
   font-family: var(--font-serif);
+}
+
+.landing-shell {
+  font-family: var(--font-landing);
+  color: var(--landing-title);
+  background-color: var(--landing-bg);
+}
+
+.landing-shell h1,
+.landing-shell h2,
+.landing-shell h3,
+.landing-shell h4,
+.landing-shell h5,
+.landing-shell h6 {
+  font-family: var(--font-landing);
+}
+
+.landing-display {
+  font-family: var(--font-landing);
+  letter-spacing: -0.02em;
+}
+
+.landing-header {
+  border-bottom: 1px solid var(--landing-line);
+  background: #ffffff;
+}
+
+.landing-container {
+  width: min(var(--landing-max-width), calc(100% - (var(--landing-gutter) * 2)));
+  margin-inline: auto;
+}
+
+@media (max-width: 640px) {
+  .landing-container {
+    width: calc(100% - 1.25rem);
+  }
+}
+
+.landing-hero {
+  min-height: clamp(560px, 82vh, 900px);
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 1024px) {
+  .landing-hero {
+    min-height: auto;
+    display: block;
+  }
+}
+
+.landing-surface {
+  border: 1px solid var(--landing-line);
+  background: var(--landing-surface);
+  box-shadow: 0 10px 24px rgba(17, 40, 69, 0.08);
+}
+
+@media (max-width: 768px) {
+  .landing-display {
+    letter-spacing: -0.015em;
+  }
+}
+
+.reveal-rise {
+  animation: revealRise 0.72s cubic-bezier(0.16, 0.84, 0.44, 1) both;
+}
+
+.reveal-delay-1 {
+  animation-delay: 0.1s;
+}
+
+.reveal-delay-2 {
+  animation-delay: 0.2s;
+}
+
+.reveal-delay-3 {
+  animation-delay: 0.3s;
+}
+
+@keyframes revealRise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .admin-scope select,
