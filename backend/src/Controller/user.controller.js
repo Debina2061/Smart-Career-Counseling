@@ -30,6 +30,96 @@ const mapMlCareersToRecommendationRows = (items = []) => {
     }));
 };
 
+const sanitizeResumeFilename = (fileName) => {
+  const fallbackName = "resume.pdf";
+  if (!fileName || typeof fileName !== "string") return fallbackName;
+
+  const cleaned = fileName
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return fallbackName;
+  return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned}.pdf`;
+};
+
+const normalizeResumePublicId = (publicId) => {
+  if (!publicId || typeof publicId !== "string") return "";
+  return publicId.trim().replace(/^\/+|\/+$/g, "");
+};
+
+const appendUniqueUrl = (urls, url) => {
+  if (url && typeof url === "string" && !urls.includes(url)) {
+    urls.push(url);
+  }
+};
+
+const buildResumeCandidateUrls = (resume) => {
+  const candidateUrls = [];
+  appendUniqueUrl(candidateUrls, resume.resumeUrl);
+
+  const normalizedPublicId = normalizeResumePublicId(resume.resumePublicId);
+  if (!normalizedPublicId) return candidateUrls;
+
+  const publicIdVariants = new Set([normalizedPublicId]);
+  if (normalizedPublicId.toLowerCase().endsWith(".pdf")) {
+    publicIdVariants.add(normalizedPublicId.replace(/\.pdf$/i, ""));
+  } else {
+    publicIdVariants.add(`${normalizedPublicId}.pdf`);
+  }
+
+  for (const publicId of publicIdVariants) {
+    for (const resourceType of ["raw", "image"]) {
+      appendUniqueUrl(
+        candidateUrls,
+        cloudinary.url(publicId, {
+          resource_type: resourceType,
+          secure: true,
+          type: "upload",
+        }),
+      );
+
+      appendUniqueUrl(
+        candidateUrls,
+        cloudinary.url(publicId, {
+          resource_type: resourceType,
+          sign_url: true,
+          secure: true,
+          type: "upload",
+        }),
+      );
+    }
+  }
+
+  const expiresAt = Math.floor(Date.now() / 1000) + 10 * 60;
+  for (const publicId of publicIdVariants) {
+    const downloadPublicIdVariants = new Set([publicId, publicId.replace(/\.pdf$/i, "")]);
+
+    for (const downloadPublicId of downloadPublicIdVariants) {
+      if (!downloadPublicId) continue;
+
+      for (const resourceType of ["raw", "image"]) {
+        for (const type of ["upload", "authenticated"]) {
+          try {
+            appendUniqueUrl(
+              candidateUrls,
+              cloudinary.utils.private_download_url(downloadPublicId, "pdf", {
+                expires_at: expiresAt,
+                resource_type: resourceType,
+                type,
+              }),
+            );
+          } catch (error) {
+            console.error("[user:buildResumeCandidateUrls] Failed to build signed URL:", error.message);
+          }
+        }
+      }
+    }
+  }
+
+  return candidateUrls;
+};
+
 export const uploadResume = async (req, res) => {
   if (!req.file)
     return res.status(403).json({ message: "Resume must be uploaded" });
@@ -39,6 +129,8 @@ export const uploadResume = async (req, res) => {
 
   try {
     const { secure_url, public_id } = await uploadPdf(req.file.buffer);
+    const uploadedFileName = sanitizeResumeFilename(req.file.originalname);
+    const normalizedPublicId = normalizeResumePublicId(public_id);
 
     const pdfUrl = secure_url;
     const useInngest = Boolean(envConfig.inngestEventKey);
@@ -47,7 +139,8 @@ export const uploadResume = async (req, res) => {
     if (!resumeDoc) resumeDoc = new Resume({ userId: req.user._id });
 
     resumeDoc.resumeUrl = pdfUrl;
-    resumeDoc.resumePublicId = public_id || resumeDoc.resumePublicId;
+    resumeDoc.resumePublicId = normalizedPublicId || resumeDoc.resumePublicId;
+    resumeDoc.resumeFileName = uploadedFileName;
     resumeDoc.analysisError = "";
     if (useInngest) resumeDoc.analysisStatus = "processing";
     await resumeDoc.save();
@@ -59,7 +152,7 @@ export const uploadResume = async (req, res) => {
           data: {
             resumeId: resumeDoc._id.toString(),
             userId: req.user._id.toString(),
-            resumePublicId: public_id,
+            resumePublicId: normalizedPublicId,
             resumeUrl: pdfUrl,
           },
         });
@@ -69,6 +162,7 @@ export const uploadResume = async (req, res) => {
           status: "processing",
           analysisStatus: "processing",
           resumeId: resumeDoc._id,
+          resumeFileName: resumeDoc.resumeFileName,
         });
       } catch (sendError) {
         console.error("Inngest send failed, falling back to sync:", sendError.message);
@@ -141,6 +235,7 @@ export const uploadResume = async (req, res) => {
     return res.status(200).json({
       message: "Resume uploaded and analyzed successfully",
       resumeUrl: secure_url,
+      resumeFileName: resumeDoc.resumeFileName,
       analysis: {},
       atsScore: resumeDoc.atsScore,
       rating: mlAnalysis.rating || null,
@@ -183,48 +278,58 @@ export const getResume = async (req, res) => {
 export const getResumePdf = async (req, res) => {
   try {
     const resume = await Resume.findOne({ userId: req.user._id });
-    if (!resume || !resume.resumeUrl) {
+    if (!resume || (!resume.resumeUrl && !resume.resumePublicId)) {
       return res.status(404).json({ message: "Resume PDF not found" });
     }
 
-    console.log("[getResumePdf] Fetching PDF for user:", req.user._id);
-    console.log("[getResumePdf] Resume URL:", resume.resumeUrl);
+    const fileName = sanitizeResumeFilename(resume.resumeFileName || "resume.pdf");
+    const candidateUrls = buildResumeCandidateUrls(resume);
+    const isPreviewRequest = req.headers["x-resume-preview"] === "1" || req.query?.preview === "1";
 
-    // Approach 1: Proxy the PDF from Cloudinary
-    try {
-      const response = await axios.get(resume.resumeUrl, {
-        responseType: "arraybuffer",
-        timeout: 15000,
-        maxRedirects: 5,
-      });
-      console.log("[getResumePdf] Fetched", response.data.byteLength, "bytes");
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", "inline; filename=resume.pdf");
-      res.setHeader("Cache-Control", "private, max-age=300");
-      return res.send(Buffer.from(response.data));
-    } catch (proxyErr) {
-      console.error("[getResumePdf] Proxy fetch failed:", proxyErr.message);
-    }
+    for (const url of candidateUrls) {
+      if (!url) continue;
 
-    // Approach 2: Generate a signed Cloudinary URL and redirect
-    if (resume.resumePublicId) {
       try {
-        const signedUrl = cloudinary.url(resume.resumePublicId, {
-          resource_type: "raw",
-          sign_url: true,
-          secure: true,
-          type: "upload",
+        const response = await axios.get(url, {
+          responseType: "arraybuffer",
+          timeout: 30000,
+          maxRedirects: 5,
+          headers: {
+            Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+          },
         });
-        console.log("[getResumePdf] Redirecting to signed URL:", signedUrl);
-        return res.redirect(signedUrl);
-      } catch (signErr) {
-        console.error("[getResumePdf] Signed URL failed:", signErr.message);
+
+        const responseBuffer = Buffer.from(response.data);
+        const responseContentType = (response.headers?.["content-type"] || "").toLowerCase();
+        const hasPdfSignature = responseBuffer.slice(0, 4).toString("utf8") === "%PDF";
+        const isLikelyPdf =
+          hasPdfSignature ||
+          !responseContentType ||
+          responseContentType.includes("pdf") ||
+          responseContentType.includes("octet-stream") ||
+          responseContentType.includes("binary") ||
+          responseContentType.includes("download");
+
+        if (!isLikelyPdf) {
+          console.warn("[getResumePdf] Unexpected content type:", responseContentType, "for", url);
+          continue;
+        }
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `inline; filename="${fileName}"`);
+        res.setHeader("Cache-Control", "private, max-age=300");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        return res.send(responseBuffer);
+      } catch (fetchErr) {
+        console.error("[getResumePdf] Fetch failed:", fetchErr.message);
       }
     }
 
-    // Approach 3: Redirect to the original Cloudinary URL as last resort
-    console.log("[getResumePdf] Redirecting to original URL");
-    return res.redirect(resume.resumeUrl);
+    if (resume.resumeUrl && !isPreviewRequest) {
+      return res.redirect(resume.resumeUrl);
+    }
+
+    return res.status(502).json({ message: "Unable to fetch resume PDF from storage" });
   } catch (err) {
     console.error("[getResumePdf] Fatal error:", err.message, err.stack);
     return res.status(500).json({ message: "Failed to fetch resume PDF" });

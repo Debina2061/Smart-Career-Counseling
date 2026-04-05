@@ -13,6 +13,10 @@ export const resumeSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    resumeFileName: {
+        type: String,
+        default: "resume.pdf"
+    },
     resumeContent : {
         type: mongoose.Schema.Types.Mixed,
         default: {}
