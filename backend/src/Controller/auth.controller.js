@@ -342,64 +342,143 @@ export const deleteAccount = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   const user = req.user;
-  let result;
+  let uploadedAvatarUrl;
   if (req.file) {
-    result = await uploadImageBuffer(req.file.buffer).catch((err) =>
-      console.log(err),
-    );
-    if (result?.secure_url) {
+    const uploadResult = await uploadImageBuffer(req.file.buffer).catch((err) => {
+      console.log(err);
+      return null;
+    });
+    if (uploadResult?.secure_url) {
+      uploadedAvatarUrl = uploadResult.secure_url;
       await User.findOneAndUpdate(
         { _id: user?._id },
-        { $set: { avatarUrl: result.secure_url } },
+        { $set: { avatarUrl: uploadedAvatarUrl } },
       );
     }
   }
+
   const { age, educationLevel, gender, skills, interest, experience, name } = req.body;
-  if (name) {
+
+  if (name && typeof name === "string" && name.trim()) {
     await User.findOneAndUpdate(
       { _id: user?._id },
-      { $set: { name: name } }
+      { $set: { name: name.trim() } },
     );
   }
+
   const normalizeArray = (value) => {
-    if (!value) return [];
+    if (value === undefined || value === null) return undefined;
     if (Array.isArray(value)) return value;
     if (typeof value === "string") {
       try {
         const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed : [value];
+        if (Array.isArray(parsed)) return parsed;
       } catch {
         return [value];
       }
+      return [value];
     }
     return [];
   };
-  const parsedSkills = normalizeArray(skills);
-  const parsedInterest = normalizeArray(interest);
-  let parsedExperience = experience;
-  if (typeof experience === "string") {
-    try {
-      parsedExperience = JSON.parse(experience);
-    } catch {
-      parsedExperience = experience;
+
+  const sanitizeStringArray = (value) => {
+    const normalized = normalizeArray(value);
+    if (normalized === undefined) return undefined;
+    return [
+      ...new Set(
+        normalized
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean),
+      ),
+    ];
+  };
+
+  const profileSet = {};
+  const profileUnset = {};
+
+  if (age !== undefined) {
+    if (age === "" || age === null) {
+      profileUnset.age = 1;
+    } else {
+      const parsedAge = Number(age);
+      if (!Number.isInteger(parsedAge) || parsedAge < 1 || parsedAge > 100) {
+        return res.status(400).json({
+          message: "Age must be an integer between 1 and 100",
+        });
+      }
+      profileSet.age = parsedAge;
     }
   }
-  const profileInformation = await Profile.findOneAndUpdate(
-    { userId: user?._id },
-    {
-      $set: {
-        age: age,
-        educationLevel: educationLevel,
-        gender: gender,
-        interest: parsedInterest,
-        experience: parsedExperience,
-        skills: parsedSkills,
-      },
-    },
-    { new: true, upsert: true },
-  );
+
+  if (gender !== undefined) {
+    const normalizedGender = String(gender).toLowerCase();
+    const validGenders = ["male", "female", "other"];
+    if (!validGenders.includes(normalizedGender)) {
+      return res.status(400).json({
+        message: "Gender must be male, female, or other",
+      });
+    }
+    profileSet.gender = normalizedGender;
+  }
+
+  if (educationLevel !== undefined) {
+    const validEducationLevels = ["secondary", "bachelor", "master", "phd"];
+    if (educationLevel === "" || educationLevel === null) {
+      profileUnset.educationLevel = 1;
+    } else if (!validEducationLevels.includes(String(educationLevel))) {
+      return res.status(400).json({
+        message: "Invalid education level",
+      });
+    } else {
+      profileSet.educationLevel = educationLevel;
+    }
+  }
+
+  const parsedSkills = sanitizeStringArray(skills);
+  if (parsedSkills !== undefined) {
+    profileSet.skills = parsedSkills;
+  }
+
+  const parsedInterest = sanitizeStringArray(interest);
+  if (parsedInterest !== undefined) {
+    profileSet.interest = parsedInterest;
+  }
+
+  let parsedExperience = experience;
+  if (experience !== undefined) {
+    if (typeof experience === "string") {
+      try {
+        parsedExperience = JSON.parse(experience);
+      } catch {
+        parsedExperience = experience;
+      }
+    }
+    profileSet.experience = parsedExperience;
+  }
+
+  const profileUpdate = {};
+  if (Object.keys(profileSet).length > 0) {
+    profileUpdate.$set = profileSet;
+  }
+  if (Object.keys(profileUnset).length > 0) {
+    profileUpdate.$unset = profileUnset;
+  }
+
+  let profileInformation = await Profile.findOne({ userId: user?._id });
+  if (Object.keys(profileUpdate).length > 0) {
+    profileInformation = await Profile.findOneAndUpdate(
+      { userId: user?._id },
+      profileUpdate,
+      { new: true, upsert: true, runValidators: true },
+    );
+  }
+
+  const updatedUser = await User.findById(user?._id).select("-password");
+
   return res.status(200).json({
     message: "update profile successfully.",
-    avatarUrl: result?.secure_url,
+    avatarUrl: updatedUser?.avatarUrl || uploadedAvatarUrl || null,
+    user: updatedUser,
+    data: profileInformation,
   });
 };

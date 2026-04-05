@@ -4,6 +4,7 @@ import {
     getAdminMe,
     getAllUsers,
     getUserDetails,
+    getUserResumePdf,
     updateUser,
     deleteUser,
     getAllAdmins,
@@ -38,6 +39,9 @@ adminRouter.route("/analytics")
 // User management
 adminRouter.route("/users")
     .get(hasPermission("manageUsers"), ErrorHandler(getAllUsers));
+
+adminRouter.route("/users/:userId/resume/pdf")
+    .get(hasPermission("manageUsers"), ErrorHandler(getUserResumePdf));
 
 adminRouter.route("/users/:userId")
     .get(hasPermission("manageUsers"), ErrorHandler(getUserDetails))

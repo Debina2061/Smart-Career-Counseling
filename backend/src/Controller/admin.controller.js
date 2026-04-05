@@ -1,3 +1,4 @@
+import axios from "axios";
 import { Admin } from "../Model/admin.model.js";
 import { User } from "../Model/user.model.js";
 import { Job } from "../Model/job.model.js";
@@ -6,6 +7,147 @@ import { Resume } from "../Model/resume.model.js";
 import { Recommendation } from "../Model/recommendation.model.js";
 import { ChatSession } from "../Model/chatbot.model.js";
 import { SystemLog } from "../Model/systemLog.model.js";
+import { cloudinary } from "../utils/cloudinary.js";
+
+const sanitizeResumeFilename = (fileName) => {
+    const fallbackName = "resume.pdf";
+    if (!fileName || typeof fileName !== "string") return fallbackName;
+
+    const cleaned = fileName
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!cleaned) return fallbackName;
+    return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned}.pdf`;
+};
+
+const normalizeResumePublicId = (publicId) => {
+    if (!publicId || typeof publicId !== "string") return "";
+    return publicId.trim().replace(/^\/+|\/+$/g, "");
+};
+
+const appendUniqueUrl = (urls, url) => {
+    if (url && typeof url === "string" && !urls.includes(url)) {
+        urls.push(url);
+    }
+};
+
+const buildResumeCandidateUrls = (resume) => {
+    const candidateUrls = [];
+    appendUniqueUrl(candidateUrls, resume.resumeUrl);
+
+    const normalizedPublicId = normalizeResumePublicId(resume.resumePublicId);
+    if (!normalizedPublicId) return candidateUrls;
+
+    const publicIdVariants = new Set([normalizedPublicId]);
+    if (normalizedPublicId.toLowerCase().endsWith(".pdf")) {
+        publicIdVariants.add(normalizedPublicId.replace(/\.pdf$/i, ""));
+    } else {
+        publicIdVariants.add(`${normalizedPublicId}.pdf`);
+    }
+
+    for (const publicId of publicIdVariants) {
+        for (const resourceType of ["raw", "image"]) {
+            appendUniqueUrl(
+                candidateUrls,
+                cloudinary.url(publicId, {
+                    resource_type: resourceType,
+                    secure: true,
+                    type: "upload",
+                }),
+            );
+
+            appendUniqueUrl(
+                candidateUrls,
+                cloudinary.url(publicId, {
+                    resource_type: resourceType,
+                    sign_url: true,
+                    secure: true,
+                    type: "upload",
+                }),
+            );
+        }
+    }
+
+    const expiresAt = Math.floor(Date.now() / 1000) + 10 * 60;
+    for (const publicId of publicIdVariants) {
+        const downloadPublicIdVariants = new Set([publicId, publicId.replace(/\.pdf$/i, "")]);
+
+        for (const downloadPublicId of downloadPublicIdVariants) {
+            if (!downloadPublicId) continue;
+
+            for (const resourceType of ["raw", "image"]) {
+                for (const type of ["upload", "authenticated"]) {
+                    try {
+                        appendUniqueUrl(
+                            candidateUrls,
+                            cloudinary.utils.private_download_url(downloadPublicId, "pdf", {
+                                expires_at: expiresAt,
+                                resource_type: resourceType,
+                                type,
+                            }),
+                        );
+                    } catch (error) {
+                        console.error("[admin:buildResumeCandidateUrls] Failed to build signed URL:", error.message);
+                    }
+                }
+            }
+        }
+    }
+
+    return candidateUrls;
+};
+
+const sendResumePdf = async (resume, req, res) => {
+    const fileName = sanitizeResumeFilename(resume.resumeFileName || "resume.pdf");
+    const candidateUrls = buildResumeCandidateUrls(resume);
+    const isPreviewRequest = req.headers["x-resume-preview"] === "1" || req.query?.preview === "1";
+
+    for (const url of candidateUrls) {
+        if (!url) continue;
+
+        try {
+            const response = await axios.get(url, {
+                responseType: "arraybuffer",
+                timeout: 30000,
+                maxRedirects: 5,
+                headers: {
+                    Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+                },
+            });
+
+            const responseBuffer = Buffer.from(response.data);
+            const responseContentType = (response.headers?.["content-type"] || "").toLowerCase();
+            const hasPdfSignature = responseBuffer.slice(0, 4).toString("utf8") === "%PDF";
+            const isLikelyPdf =
+                hasPdfSignature ||
+                !responseContentType ||
+                responseContentType.includes("pdf") ||
+                responseContentType.includes("octet-stream") ||
+                responseContentType.includes("binary") ||
+                responseContentType.includes("download");
+
+            if (!isLikelyPdf) {
+                continue;
+            }
+
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `inline; filename="${fileName}"`);
+            res.setHeader("Cache-Control", "private, max-age=300");
+            res.setHeader("X-Content-Type-Options", "nosniff");
+            return res.send(responseBuffer);
+        } catch (fetchErr) {
+            console.error("[admin:getUserResumePdf] Fetch failed:", fetchErr.message);
+        }
+    }
+
+    if (resume.resumeUrl && !isPreviewRequest) {
+        return res.redirect(resume.resumeUrl);
+    }
+
+    return res.status(502).json({ message: "Unable to fetch resume PDF from storage" });
+};
 
 /**
  * Get admin dashboard stats
@@ -117,6 +259,7 @@ export const getUserDetails = async (req, res) => {
             resume: resume
                 ? {
                     resumeUrl: resume.resumeUrl,
+                    resumePdfUrl: `/admin/users/${userId}/resume/pdf`,
                     atsScore: resume.atsScore,
                     analysisStatus: resume.analysisStatus || "completed",
                     updatedAt: resume.updatedAt || resume.createdAt,
@@ -128,6 +271,26 @@ export const getUserDetails = async (req, res) => {
             topRecommendations: recommendations?.recommendations?.slice(0, 3) || []
         }
     });
+};
+
+/**
+ * Get user resume PDF (admin)
+ * GET /admin/users/:userId/resume/pdf
+ */
+export const getUserResumePdf = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const resume = await Resume.findOne({ userId });
+        if (!resume || (!resume.resumeUrl && !resume.resumePublicId)) {
+            return res.status(404).json({ message: "Resume PDF not found" });
+        }
+
+        return sendResumePdf(resume, req, res);
+    } catch (err) {
+        console.error("[admin:getUserResumePdf] Fatal error:", err.message, err.stack);
+        return res.status(500).json({ message: "Failed to fetch resume PDF" });
+    }
 };
 
 /**
