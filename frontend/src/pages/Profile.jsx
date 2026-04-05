@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { FaFileAlt, FaBrain, FaUser, FaBell, FaCloudUploadAlt, FaPlusCircle, FaCode, FaGraduationCap, FaBriefcase, FaProjectDiagram, FaTools, FaChartBar, FaFilePdf, FaExpand, FaCompress, FaExternalLinkAlt, FaCheckCircle, FaShieldAlt, FaTrashAlt } from 'react-icons/fa'
+import { FaFileAlt, FaBrain, FaUser, FaBell, FaCloudUploadAlt, FaPlusCircle, FaCode, FaGraduationCap, FaBriefcase, FaProjectDiagram, FaTools, FaChartBar, FaFilePdf, FaExpand, FaCompress, FaExternalLinkAlt, FaCheckCircle, FaShieldAlt, FaTrashAlt, FaExclamationCircle } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
+import PdfImagePreview from '../components/PdfImagePreview'
+import StudentProfileDropdown from '../components/StudentProfileDropdown'
 import { authAPI, resumeAPI, userAPI } from '../utils/api'
 
 function Profile() {
@@ -230,8 +232,8 @@ function Profile() {
           age: data.age || '',
           gender: data.gender || 'male',
           educationLevel: data.educationLevel || '',
-          skills: data.skills || [],
-          interest: data.interest || [],
+          skills: Array.isArray(data.skills) ? data.skills : [],
+          interest: Array.isArray(data.interest) ? data.interest : [],
         });
       }
     } catch (error) {
@@ -328,25 +330,41 @@ function Profile() {
   }
 
   const handleAddSkill = () => {
-    if (newSkill.trim()) {
-      setProfileData({ ...profileData, skills: [...profileData.skills, newSkill.trim()] })
-      setNewSkill('')
-    }
+    const skillToAdd = newSkill.trim();
+    if (!skillToAdd) return;
+    setProfileData((prev) => {
+      if (prev.skills.some((skill) => skill.toLowerCase() === skillToAdd.toLowerCase())) {
+        return prev;
+      }
+      return { ...prev, skills: [...prev.skills, skillToAdd] };
+    });
+    setNewSkill('');
   }
 
   const handleAddInterest = () => {
-    if (newInterest.trim()) {
-      setProfileData({ ...profileData, interest: [...profileData.interest, newInterest.trim()] })
-      setNewInterest('')
-    }
+    const interestToAdd = newInterest.trim();
+    if (!interestToAdd) return;
+    setProfileData((prev) => {
+      if (prev.interest.some((interestItem) => interestItem.toLowerCase() === interestToAdd.toLowerCase())) {
+        return prev;
+      }
+      return { ...prev, interest: [...prev.interest, interestToAdd] };
+    });
+    setNewInterest('');
   }
 
   const handleRemoveSkill = (skill) => {
-    setProfileData({ ...profileData, skills: profileData.skills.filter(s => s !== skill) })
+    setProfileData((prev) => ({
+      ...prev,
+      skills: prev.skills.filter((s) => s !== skill),
+    }))
   }
 
   const handleRemoveInterest = (interest) => {
-    setProfileData({ ...profileData, interest: profileData.interest.filter(i => i !== interest) })
+    setProfileData((prev) => ({
+      ...prev,
+      interest: prev.interest.filter((i) => i !== interest),
+    }))
   }
 
   const handleSaveChanges = async () => {
@@ -364,12 +382,24 @@ function Profile() {
       };
 
       const response = await authAPI.updateProfile(updatePayload);
-      if (response?.avatarUrl) {
-        updateUser({ avatarUrl: response.avatarUrl });
-        setUserProfile((prev) => ({ ...prev, avatar: response.avatarUrl }));
-        setAvatarFile(null);
-        setAvatarPreview('');
+      if (response?.user) {
+        updateUser(response.user);
       }
+      if (response?.avatarUrl) {
+        setUserProfile((prev) => ({ ...prev, avatar: response.avatarUrl }));
+      }
+      if (response?.data) {
+        setProfileData((prev) => ({
+          ...prev,
+          age: response.data.age || '',
+          gender: response.data.gender || 'male',
+          educationLevel: response.data.educationLevel || '',
+          skills: Array.isArray(response.data.skills) ? response.data.skills : [],
+          interest: Array.isArray(response.data.interest) ? response.data.interest : [],
+        }));
+      }
+      setAvatarFile(null);
+      setAvatarPreview('');
       setMessage({ type: 'success', text: 'Changes saved successfully!' });
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Failed to save changes' });
@@ -378,66 +408,71 @@ function Profile() {
     }
   }
 
-  const resumeName = resume?.resumeUrl ? resume.resumeUrl.split('/').pop() : 'No resume uploaded';
-  const resumeDate = resume?.updatedAt ? new Date(resume.updatedAt).toLocaleDateString() : '';
+  const resumePdfUrl = resume?.resumeUrl
+    ? `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/user/resume/pdf?token=${encodeURIComponent(localStorage.getItem('token') || '')}&t=${encodeURIComponent(resume?.updatedAt || '')}`
+    : '';
+  const completionChecks = [
+    Boolean(userProfile.name && userProfile.email),
+    Boolean(profileData.age && profileData.gender),
+    Boolean(profileData.educationLevel),
+    Boolean(resume),
+  ];
+  const completionPercent = Math.round((completionChecks.filter(Boolean).length / completionChecks.length) * 100);
+
+  const profileTabs = [
+    { key: 'personal', label: 'Personal Info' },
+    { key: 'skills', label: 'Skills' },
+    { key: 'resume', label: 'Resume' },
+    { key: 'account', label: 'Account' },
+  ];
 
   return (
-    <div className="flex h-screen bg-linear-to-br from-slate-50 via-stone-50 to-amber-50">
+    <div className="flex min-h-screen bg-[#f3f4f8]">
       <Sidebar />
 
-      <div className="flex-1 ml-52 flex flex-col overflow-hidden">
-        <header className="bg-white/80 backdrop-blur border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-linear-to-br from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-sm">
-              <FaUser className="text-lg" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-slate-500">Account</p>
-              <h2 className="text-2xl font-bold text-slate-900">Profile Management</h2>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="relative" ref={notificationRef}>
+      <div className="ml-52 flex min-h-screen flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-end border-b border-slate-200 bg-white px-4 sm:px-6">
+          <div className="flex items-center gap-3" ref={notificationRef}>
+            <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowNotifications((prev) => !prev)}
-                className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                className="relative rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Notifications"
               >
-                <FaBell className="text-xl" />
+                <FaBell className="text-lg" />
                 {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-5 h-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow">
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
                     {notifications.length}
                   </span>
                 )}
               </button>
+
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
-                  {/* Header */}
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                <div className="absolute right-0 mt-2 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                  <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-gray-900 font-semibold text-sm flex items-center gap-2">
-                        <FaBell className="text-teal-600" />
+                      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <FaBell className="text-[#4f46e5]" />
                         Notifications
                       </h3>
                       {notifications.length > 0 && (
-                        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                        <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">
                           {notifications.length}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Content */}
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
                       <div className="px-4 py-8 text-center">
-                        <FaCheckCircle className="text-3xl text-green-500 mx-auto mb-2" />
-                        <p className="text-gray-600 text-sm">No notifications</p>
+                        <FaCheckCircle className="mx-auto mb-2 text-3xl text-emerald-500" />
+                        <p className="text-sm text-slate-600">No notifications</p>
                       </div>
                     ) : (
-                      <div className="divide-y divide-gray-100">
-                        {notifications.map((notif, index) => {
+                      <div className="divide-y divide-slate-100">
+                        {notifications.map((notif) => {
                           const Icon = notif.icon;
                           const colorMap = {
                             purple: 'text-purple-600 bg-purple-50',
@@ -451,21 +486,21 @@ function Profile() {
                           return (
                             <div
                               key={notif.id}
-                              className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition"
+                              className="cursor-pointer px-4 py-3 transition hover:bg-slate-50"
                               onClick={() => {
                                 setActiveTab(notif.tab);
                                 setShowNotifications(false);
                               }}
                             >
                               <div className="flex items-start gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${colors}`}>
+                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colors}`}>
                                   <Icon className="text-sm" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-gray-900 font-medium text-sm mb-0.5">
+                                  <p className="mb-0.5 text-sm font-medium text-slate-900">
                                     {notif.title}
                                   </p>
-                                  <p className="text-gray-500 text-xs">
+                                  <p className="text-xs text-slate-500">
                                     {notif.message}
                                   </p>
                                 </div>
@@ -479,102 +514,82 @@ function Profile() {
                 </div>
               )}
             </div>
-            <img src={userProfile.avatar} alt={userProfile.name} className="w-9 h-9 rounded-full" />
+
+            <StudentProfileDropdown
+              name={userProfile.name}
+              email={userProfile.email || 'student@demo.com'}
+              avatar={avatarPreview || userProfile.avatar}
+              className="border-l border-slate-200 pl-3"
+            />
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto bg-[#f5f7fb] p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-6xl space-y-4">
+            <div>
+              <h1 className="text-4xl font-bold leading-none text-slate-900">Profile Management</h1>
+              <p className="mt-2 text-slate-600">Manage your personal information and preferences</p>
+            </div>
+
           {message.text && (
-            <div className={`mb-6 px-4 py-3 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+              <div className={`rounded-xl border px-4 py-3 text-sm ${message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
               {message.text}
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <div className="lg:col-span-1">
-              <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-                <div className="h-1 bg-linear-to-r from-teal-500 via-emerald-400 to-amber-400" />
-                <div className="p-6">
-                  <div className="text-center mb-6">
-                    <img src={userProfile.avatar} alt={userProfile.name} className="w-24 h-24 rounded-full mx-auto mb-4 shadow-md ring-4 ring-amber-100" />
-                    <h3 className="text-2xl font-bold text-slate-900">{userProfile.name}</h3>
-                    <p className="text-slate-500 text-sm mt-1">{userProfile.email}</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => setActiveTab('personal')}
-                      className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition font-semibold ${activeTab === 'personal' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
-                    >
-                      <FaUser className="text-lg" />
-                      <span>Personal Info</span>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('resume')}
-                      className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition font-semibold ${activeTab === 'resume' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
-                    >
-                      <FaFileAlt className="text-lg" />
-                      <span>Resume</span>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('skills')}
-                      className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition font-semibold ${activeTab === 'skills' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
-                    >
-                      <FaBrain className="text-lg" />
-                      <span>Skills & Interests</span>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('account')}
-                      className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition font-semibold ${activeTab === 'account' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
-                    >
-                      <FaShieldAlt className="text-lg" />
-                      <span>Account</span>
-                    </button>
-                  </div>
+            {completionPercent < 100 && (
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-slate-900">Profile Completion</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-[#5b5ee7]">{completionPercent}%</span>
+                  <FaExclamationCircle className="text-amber-500" />
                 </div>
               </div>
-            </div>
+              <div className="h-3 overflow-hidden rounded-full bg-[#dcdffa]">
+                <div
+                  className="h-full rounded-full bg-linear-to-r from-[#5b5ee7] to-[#7a6cf0]"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+              <p className="mt-3 text-sm text-slate-600">Complete your profile to get better career recommendations</p>
+            </section>
+            )}
 
-            <div className="lg:col-span-3">
+            <section className="rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+                {profileTabs.map((tab) => (
+                  <button
+                    type="button"
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                      activeTab === tab.key
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               {activeTab === 'personal' && (
-                <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-8">
-                  <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-2xl font-bold text-slate-900">Personal Information</h3>
-                  </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Personal Information</h3>
 
-                  <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Name</label>
-                      <input
-                        type="text"
-                        value={userProfile.name}
-                        disabled
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-600"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
-                      <input
-                        type="email"
-                        value={userProfile.email}
-                        disabled
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-600"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-6 mb-6">
+                  <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
                     <img
                       src={avatarPreview || userProfile.avatar}
                       alt={userProfile.name}
-                      className="w-20 h-20 rounded-full object-cover border border-slate-200 shadow-sm"
+                      className="h-20 w-20 rounded-full border border-slate-200 object-cover"
                       onError={(e) => {
                         e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userProfile.email || 'User'}`;
                       }}
                     />
+
                     <div>
                       <input
                         ref={avatarInputRef}
@@ -583,76 +598,96 @@ function Profile() {
                         onChange={handleAvatarChange}
                         className="hidden"
                       />
+
                       <button
+                        type="button"
                         onClick={() => avatarInputRef.current?.click()}
-                        className="px-5 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition"
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                       >
-                        Change Photo
+                        <FaCloudUploadAlt className="text-slate-500" />
+                        Upload Photo
                       </button>
-                      <p className="text-xs text-slate-500 mt-2">PNG, JPG up to 10MB</p>
-                      {avatarFile && (
-                        <p className="text-xs text-slate-700 mt-1">{avatarFile.name}</p>
-                      )}
+                      <p className="mt-2 text-xs text-slate-500">JPG, PNG or GIF (MAX. 2MB)</p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-6 mb-6">
+                  <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Age</label>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Full Name</label>
+                      <input
+                        type="text"
+                        value={userProfile.name}
+                        disabled
+                        className="w-full rounded-lg border border-slate-200 bg-[#f8fafc] px-4 py-2 text-slate-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Email</label>
+                      <input
+                        type="email"
+                        value={userProfile.email}
+                        disabled
+                        className="w-full rounded-lg border border-slate-200 bg-[#f8fafc] px-4 py-2 text-slate-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Age</label>
                       <input
                         type="number"
                         name="age"
                         value={profileData.age}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 placeholder-slate-400 shadow-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                        placeholder="Enter age"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-[#5b5ee7] focus:outline-none"
                       />
                     </div>
+
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Gender</label>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Gender</label>
                       <select
                         name="gender"
                         value={profileData.gender}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 shadow-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-[#5b5ee7] focus:outline-none"
                       >
                         <option value="male">Male</option>
                         <option value="female">Female</option>
                         <option value="other">Other</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Education Level</label>
+
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Education Level</label>
                       <select
                         name="educationLevel"
                         value={profileData.educationLevel}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 shadow-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-[#5b5ee7] focus:outline-none"
                       >
                         <option value="">Select</option>
                         <option value="secondary">Secondary</option>
-                        <option value="bachelor">Bachelor</option>
-                        <option value="master">Master</option>
+                        <option value="bachelor">Bachelor's Degree</option>
+                        <option value="master">Master's Degree</option>
                         <option value="phd">PhD</option>
                       </select>
                     </div>
                   </div>
 
-                  <div className="flex gap-4">
-                    <button
-                      onClick={handleSaveChanges}
-                      disabled={loading}
-                      className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition disabled:opacity-50"
-                    >
-                      {loading ? 'Saving...' : 'Save Changes'}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveChanges}
+                    disabled={loading}
+                    className="mt-6 rounded-lg bg-[#6d5ef7] px-6 py-2 text-sm font-semibold text-white transition hover:bg-[#5a4ee0] disabled:opacity-50"
+                  >
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </button>
                 </div>
               )}
 
               {activeTab === 'resume' && (
-                <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-8">
-                  <div className="flex items-center justify-between mb-6">
+                <div>
+                  <div className="mb-6 flex items-center justify-between">
                     <h3 className="text-2xl font-bold text-slate-900">Resume</h3>
                     <div>
                       <input
@@ -664,8 +699,9 @@ function Profile() {
                       />
                       {!resumeFile ? (
                         <button
+                          type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center gap-2 px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition text-sm"
+                          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                         >
                           <FaCloudUploadAlt />
                           {resume?.resumeUrl ? 'Replace Resume' : 'Upload Resume'}
@@ -674,15 +710,17 @@ function Profile() {
                         <div className="flex items-center gap-3">
                           <span className="text-sm text-slate-600">{resumeFile.name}</span>
                           <button
+                            type="button"
                             onClick={handleResumeUpload}
                             disabled={uploadingResume}
-                            className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition text-sm disabled:opacity-50"
+                            className="rounded-lg bg-[#6d5ef7] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5a4ee0] disabled:opacity-50"
                           >
                             {uploadingResume ? 'Uploading...' : 'Upload'}
                           </button>
                           <button
+                            type="button"
                             onClick={() => { setResumeFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                            className="px-3 py-2 text-slate-500 hover:text-slate-700 text-sm"
+                            className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700"
                           >
                             Cancel
                           </button>
@@ -692,20 +730,19 @@ function Profile() {
                   </div>
 
                   {resume?.resumeUrl ? (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                      <iframe
-                        src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/user/resume/pdf?token=${localStorage.getItem('token')}`}
-                        title="Resume PDF"
-                        className="w-full"
-                        style={{ height: '80vh', border: 'none' }}
-                      />
+                    <div className="space-y-3">
+                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className="p-3">
+                          <PdfImagePreview pdfUrl={resumePdfUrl} maxPages={0} showPageCounter={false} />
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-300 rounded-xl p-16 text-center hover:border-teal-500 hover:bg-teal-50 transition cursor-pointer"
+                      className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-14 text-center transition hover:border-[#6d5ef7] hover:bg-[#f5f6ff]"
                     >
-                      <FaCloudUploadAlt className="text-5xl text-slate-400 mx-auto mb-4" />
+                      <FaCloudUploadAlt className="mx-auto mb-4 text-5xl text-slate-400" />
                       <h4 className="text-lg font-semibold text-slate-900 mb-2">No resume uploaded yet</h4>
                       <p className="text-slate-500">Click here or use the button above to upload your PDF resume</p>
                     </div>
@@ -714,8 +751,8 @@ function Profile() {
               )}
 
               {activeTab === 'skills' && (
-                <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-8">
-                  <div className="flex items-center justify-between mb-8">
+                <div>
+                  <div className="mb-8 flex items-center justify-between">
                     <h3 className="text-2xl font-bold text-slate-900">Skills & Interests</h3>
                   </div>
 
@@ -726,13 +763,20 @@ function Profile() {
                         type="text"
                         value={newSkill}
                         onChange={(e) => setNewSkill(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddSkill();
+                          }
+                        }}
                         placeholder="Enter a skill..."
                         className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-black"
                       />
                       <button
+                        type="button"
                         onClick={handleAddSkill}
-                        className="flex items-center gap-2 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition"
+                        disabled={!newSkill.trim()}
+                        className="flex items-center gap-2 rounded-lg bg-[#6d5ef7] px-6 py-2 font-semibold text-white transition hover:bg-[#5a4ee0] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <FaPlusCircle className="text-lg" />
                         <span>Add</span>
@@ -740,9 +784,9 @@ function Profile() {
                     </div>
                     <div className="flex flex-wrap gap-3">
                       {profileData.skills.map((skill, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-teal-100 text-teal-800 px-4 py-2 rounded-full font-medium">
+                        <div key={i} className="flex items-center gap-2 rounded-full bg-[#e7e8ff] px-4 py-2 font-medium text-[#4a43c7]">
                           <span>{skill}</span>
-                          <button onClick={() => handleRemoveSkill(skill)} className="text-teal-600 hover:text-teal-800">x</button>
+                          <button type="button" onClick={() => handleRemoveSkill(skill)} className="text-[#5a4ee0] hover:text-[#4338ca]" aria-label={`Remove ${skill}`}>x</button>
                         </div>
                       ))}
                     </div>
@@ -755,13 +799,20 @@ function Profile() {
                         type="text"
                         value={newInterest}
                         onChange={(e) => setNewInterest(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleAddInterest()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddInterest();
+                          }
+                        }}
                         placeholder="Enter an interest..."
                         className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-black"
                       />
                       <button
+                        type="button"
                         onClick={handleAddInterest}
-                        className="flex items-center gap-2 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition"
+                        disabled={!newInterest.trim()}
+                        className="flex items-center gap-2 rounded-lg bg-[#6d5ef7] px-6 py-2 font-semibold text-white transition hover:bg-[#5a4ee0] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <FaPlusCircle className="text-lg" />
                         <span>Add</span>
@@ -769,9 +820,9 @@ function Profile() {
                     </div>
                     <div className="flex flex-wrap gap-3">
                       {profileData.interest.map((interest, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-amber-100 text-amber-800 px-4 py-2 rounded-full font-medium">
+                        <div key={i} className="flex items-center gap-2 rounded-full bg-[#fef3c7] px-4 py-2 font-medium text-amber-800">
                           <span>{interest}</span>
-                          <button onClick={() => handleRemoveInterest(interest)} className="text-amber-700 hover:text-amber-900">x</button>
+                          <button type="button" onClick={() => handleRemoveInterest(interest)} className="text-amber-700 hover:text-amber-900" aria-label={`Remove ${interest}`}>x</button>
                         </div>
                       ))}
                     </div>
@@ -779,9 +830,10 @@ function Profile() {
 
                   <div className="mt-8">
                     <button
+                      type="button"
                       onClick={handleSaveChanges}
                       disabled={loading}
-                      className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                      className="rounded-lg bg-[#6d5ef7] px-8 py-3 font-semibold text-white transition hover:bg-[#5a4ee0] disabled:opacity-50"
                     >
                       {loading ? 'Saving...' : 'Save Changes'}
                     </button>
@@ -789,11 +841,9 @@ function Profile() {
                 </div>
               )}
 
-              {/* ── Account tab ── */}
               {activeTab === 'account' && (
                 <div className="space-y-6">
-                  {/* Email Verification */}
-                  <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-8">
+                  <div className="rounded-xl border border-slate-200 bg-white p-6">
                     <h3 className="text-2xl font-bold text-slate-900 mb-6">Email Verification</h3>
 
                     {user?.isVerified ? (
@@ -820,8 +870,9 @@ function Profile() {
                           </div>
                           {!showOtpInput && (
                             <button
+                              type="button"
                               onClick={sendVerificationOtp}
-                              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition"
+                              className="rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
                             >
                               Send Code
                             </button>
@@ -850,9 +901,10 @@ function Profile() {
                                 />
                               ))}
                               <button
+                                type="button"
                                 onClick={handleVerifyOtp}
                                 disabled={verifyLoading || otp.join('').length !== OTP_LENGTH}
-                                className="ml-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                                className="ml-2 rounded-lg bg-[#6d5ef7] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5a4ee0] disabled:opacity-50"
                               >
                                 {verifyLoading ? 'Verifying...' : 'Verify'}
                               </button>
@@ -861,7 +913,7 @@ function Profile() {
                               {resendTimer > 0 ? (
                                 <span>Resend code in <span className="font-semibold text-teal-600">{resendTimer}s</span></span>
                               ) : (
-                                <button onClick={sendVerificationOtp} className="font-semibold text-teal-600 hover:underline">
+                                <button type="button" onClick={sendVerificationOtp} className="font-semibold text-teal-600 hover:underline">
                                   Resend Code
                                 </button>
                               )}
@@ -872,8 +924,7 @@ function Profile() {
                     )}
                   </div>
 
-                  {/* Delete Account */}
-                  <div className="bg-white/90 rounded-2xl shadow-xl border border-red-200 p-8">
+                  <div className="rounded-xl border border-red-200 bg-white p-6">
                     <h3 className="text-2xl font-bold text-red-700 mb-2">Danger Zone</h3>
                     <p className="text-slate-500 text-sm mb-6">
                       Permanently delete your account and all associated data. This action cannot be undone.
@@ -881,6 +932,7 @@ function Profile() {
 
                     {!showDeleteConfirm ? (
                       <button
+                        type="button"
                         onClick={() => setShowDeleteConfirm(true)}
                         className="flex items-center gap-2 px-5 py-2.5 border-2 border-red-300 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition"
                       >
@@ -904,13 +956,15 @@ function Profile() {
                             className="flex-1 max-w-xs px-4 py-2 border border-red-300 rounded-lg text-sm bg-white text-slate-900 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200"
                           />
                           <button
+                            type="button"
                             onClick={handleDeleteAccount}
                             disabled={deleteTyped !== 'DELETE' || deleteLoading}
-                            className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-40"
+                            className="rounded-lg bg-red-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-40"
                           >
                             {deleteLoading ? 'Deleting...' : 'Confirm Delete'}
                           </button>
                           <button
+                            type="button"
                             onClick={() => { setShowDeleteConfirm(false); setDeleteTyped(''); setDeleteError(''); }}
                             className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
                           >
@@ -922,7 +976,7 @@ function Profile() {
                   </div>
                 </div>
               )}
-            </div>
+            </section>
           </div>
         </main>
       </div>

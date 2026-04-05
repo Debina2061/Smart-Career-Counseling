@@ -1,51 +1,158 @@
-import React, { useState, useEffect } from 'react'
-import { FaMapPin, FaChevronDown, FaTrophy, FaCode, FaDatabase, FaPalette, FaBriefcase, FaCloud, FaChartBar, FaArrowUp, FaSync, FaGlobe } from 'react-icons/fa'
-import { Link, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import Sidebar from '../components/Sidebar'
-import { careerAPI, resumeAPI } from '../utils/api'
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  FaArrowUp,
+  FaBell,
+  FaBriefcase,
+  FaBuilding,
+  FaCheckCircle,
+  FaExclamationCircle,
+  FaExternalLinkAlt,
+  FaMapPin,
+  FaSearch,
+  FaSync,
+  FaTimes,
+  FaTimesCircle,
+  FaTrophy,
+} from 'react-icons/fa';
+import { useLocation } from 'react-router-dom';
+import Sidebar from '../components/Sidebar';
+import StudentProfileDropdown from '../components/StudentProfileDropdown';
+import { useAuth } from '../context/AuthContext';
+import { careerAPI, resumeAPI } from '../utils/api';
 
 const isValidObjectId = (value) => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
+
+const formatCategoryLabel = (value) => {
+  if (!value) return 'General';
+  return value
+    .toString()
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const formatSalaryRange = (salaryRange) => {
+  if (!salaryRange || (salaryRange.min == null && salaryRange.max == null)) return 'N/A';
+
+  const formatCurrency = (amount, currency = 'USD') => {
+    if (amount == null) return null;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const currency = salaryRange.currency || 'USD';
+  const min = formatCurrency(salaryRange.min, currency);
+  const max = formatCurrency(salaryRange.max, currency);
+
+  if (min && max) return `${min} - ${max}`;
+  return min || max || 'N/A';
+};
+
+const formatExperienceRange = (experienceYearsRange, experienceLevel) => {
+  if (experienceYearsRange?.min != null || experienceYearsRange?.max != null) {
+    const min = experienceYearsRange.min ?? 0;
+    const max = experienceYearsRange.max ?? min;
+    return `${min}-${max} years`;
+  }
+
+  const map = {
+    entry: '1-4 years',
+    mid: '2-5 years',
+    senior: '3-7 years',
+    lead: '5+ years',
+  };
+
+  return map[experienceLevel] || '2-5 years';
+};
+
+const getGrowthLabel = (growthPotential, marketDemand) => {
+  const raw = (growthPotential || marketDemand || 'medium').toLowerCase();
+
+  if (raw.includes('very') || raw.includes('rapid')) return 'Very High';
+  if (raw.includes('high') || raw.includes('grow')) return 'High';
+  if (raw.includes('low') || raw.includes('declin')) return 'Low';
+  return 'Medium';
+};
+
+const getGrowthTone = (label) => {
+  if (label === 'Very High') return 'bg-emerald-100 text-emerald-700';
+  if (label === 'High') return 'bg-blue-100 text-blue-700';
+  if (label === 'Low') return 'bg-rose-100 text-rose-700';
+  return 'bg-amber-100 text-amber-700';
+};
+
+const getDefaultCompanies = (category) => {
+  const normalized = (category || '').toLowerCase();
+
+  if (normalized.includes('software') || normalized.includes('tech') || normalized.includes('development')) {
+    return ['Google', 'Meta', 'Amazon', 'Microsoft'];
+  }
+
+  if (normalized.includes('design')) {
+    return ['Adobe', 'Figma', 'Canva', 'Airbnb'];
+  }
+
+  if (normalized.includes('data')) {
+    return ['Databricks', 'Oracle', 'IBM', 'Snowflake'];
+  }
+
+  return ['Google', 'Amazon', 'Microsoft', 'Accenture'];
+};
+
+const getFallbackFindJobsUrl = (careerTitle) =>
+  `https://www.google.com/search?q=${encodeURIComponent(`${careerTitle} jobs`)}`;
 
 function CareerRecommendation() {
   const { user } = useAuth();
   const location = useLocation();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [detailsCareer, setDetailsCareer] = useState(null);
+
   const [userProfile, setUserProfile] = useState({
     name: 'User',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=User'
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=User',
   });
+
   const [careerMatches, setCareerMatches] = useState([]);
   const [resumeType, setResumeType] = useState(null);
+  const [hasResume, setHasResume] = useState(true);
+
   const [summaryStats, setSummaryStats] = useState([
-    { icon: FaTrophy, value: '--', label: 'Top Match' },
-    { icon: FaArrowUp, value: '--', label: 'Avg Match' },
-    { icon: FaBriefcase, value: '--', label: 'Career Paths' },
+    { label: 'Top Match', value: '--', tone: 'text-emerald-600' },
+    { label: 'Average Match', value: '--', tone: 'text-[#5b5ee7]' },
+    { label: 'Career Paths', value: '--', tone: 'text-slate-900' },
+    { label: 'New This Week', value: '--', tone: 'text-[#7c3aed]' },
   ]);
+
   const [urlParams, setUrlParams] = useState({
     career: null,
     level: null,
     skills: null,
-    location: null
+    location: null,
   });
   const [autoSearchActive, setAutoSearchActive] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
+
   useEffect(() => {
-    // Parse URL parameters for auto-search
     const params = new URLSearchParams(location.search);
     const parsedParams = {
       career: params.get('career'),
       level: params.get('level'),
       skills: params.get('skills'),
-      location: params.get('location')
+      location: params.get('location'),
     };
-    
-    if (Object.values(parsedParams).some(v => v !== null)) {
+
+    if (Object.values(parsedParams).some((v) => v !== null)) {
       setUrlParams(parsedParams);
       setAutoSearchActive(true);
     }
@@ -55,12 +162,14 @@ function CareerRecommendation() {
     if (user) {
       setUserProfile({
         name: user.fullName || user.name || user.email?.split('@')[0] || 'User',
-        avatar: user.avatarUrl || user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email || 'User'}`
+        avatar:
+          user.avatarUrl ||
+          user.avatar ||
+          `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email || 'User'}`,
       });
     }
-    
-    // Auto-load recommendations if URL parameters are present
-    if (autoSearchActive && Object.values(urlParams).some(v => v !== null)) {
+
+    if (autoSearchActive && Object.values(urlParams).some((v) => v !== null)) {
       handleAutoSearch();
     } else {
       loadRecommendations();
@@ -70,26 +179,25 @@ function CareerRecommendation() {
   const handleAutoSearch = async () => {
     setLoading(true);
     setError('');
+
     try {
-      // If manual recommendation generation is needed, call it with parameters
-      const response = await careerAPI.generateRecommendations({
+      await careerAPI.generateRecommendations({
         searchCriteria: {
           career: urlParams.career,
           level: urlParams.level,
-          skills: urlParams.skills ? urlParams.skills.split(',').map(s => s.trim()) : null,
-          location: urlParams.location
-        }
+          skills: urlParams.skills ? urlParams.skills.split(',').map((s) => s.trim()) : null,
+          location: urlParams.location,
+        },
       });
-      console.log('Auto-search recommendations:', response);
+
       await loadRecommendations();
     } catch (err) {
       console.error('Error in auto-search:', err);
       let errorMessage = err.message || 'Failed to generate recommendations';
-      if (!errorMessage.includes('resume')) {
+      if (!errorMessage.toLowerCase().includes('resume')) {
         errorMessage += '. Please ensure your resume is uploaded.';
       }
       setError(errorMessage);
-      // Still try to load existing recommendations
       await loadRecommendations();
     } finally {
       setLoading(false);
@@ -99,70 +207,123 @@ function CareerRecommendation() {
   const loadRecommendations = async () => {
     setLoading(true);
     setError('');
+
     try {
-      // First, try to get the resume to check its type
       try {
         const resumeResponse = await resumeAPI.getResume();
-        const resumeData = resumeResponse?.data || null;
+        const resumeData = resumeResponse?.data || resumeResponse;
+        setHasResume(Boolean(resumeData));
         if (resumeData?.resume_type) {
           setResumeType(resumeData.resume_type);
         }
-      } catch (err) {
-        // If we can't get resume type, that's okay - just continue
-        console.log('Could not fetch resume type:', err.message);
+      } catch {
+        setHasResume(false);
       }
 
       const response = await careerAPI.getRecommendations();
       const recommendationDoc = response?.data || response;
       const recommendations = recommendationDoc?.recommendations || [];
 
-      const formattedCareers = recommendations.map((career, index) => {
+      const formattedCareers = recommendations.map((career) => {
         const rawCareerId = career?.careerId?._id ?? career?.careerId ?? null;
-        const normalizedCareerId = typeof rawCareerId === 'string'
-          ? rawCareerId
-          : rawCareerId?.toString?.() || null;
+        const normalizedCareerId =
+          typeof rawCareerId === 'string'
+            ? rawCareerId
+            : rawCareerId?.toString?.() || null;
+
         const careerId = isValidObjectId(normalizedCareerId) ? normalizedCareerId : null;
-        const careerName = career?.careerName || career?.name || career?.careerId?.careerName;
-        const category = career?.category || career?.careerId?.category || 'General';
+
+        const careerDoc =
+          career?.careerId && typeof career.careerId === 'object'
+            ? career.careerId
+            : {};
+
+        const title =
+          career?.careerName ||
+          career?.name ||
+          careerDoc?.careerName ||
+          'Career Path';
+
+        const category = formatCategoryLabel(career?.category || careerDoc?.category || 'General');
+
+        const aiInsight =
+          career?.aiInsights ||
+          (Array.isArray(career?.matchReasons) && career.matchReasons.length > 0
+            ? career.matchReasons.join('. ')
+            : 'This role aligns well with your profile and current skill strengths.');
+
+        const skillGaps = Array.isArray(career?.skillGaps) ? career.skillGaps : [];
+        const requiredTech = Array.isArray(careerDoc?.requiredSkills?.technical)
+          ? careerDoc.requiredSkills.technical
+          : [];
+        const requiredSoft = Array.isArray(careerDoc?.requiredSkills?.soft)
+          ? careerDoc.requiredSkills.soft
+          : [];
+
+        const matchedSkills = [...requiredTech, ...requiredSoft]
+          .filter(
+            (skill) =>
+              !skillGaps.some((gap) => gap.toLowerCase() === skill.toLowerCase())
+          )
+          .slice(0, 6);
+
+        const growthLabel = getGrowthLabel(career?.growthPotential, careerDoc?.marketDemand);
+
+        const remoteFriendly =
+          Array.isArray(careerDoc?.workEnvironment) &&
+          careerDoc.workEnvironment.includes('remote');
 
         return {
-        icon: [FaCode, FaDatabase, FaPalette, FaBriefcase, FaCloud, FaChartBar][index % 6],
-        careerId,
-        title: careerName || 'Career Path',
-        category,
-        matchScore: career.matchScore || 0,
-        description: career.aiInsights || (career.matchReasons?.join('. ') || 'No insights available yet.'),
-        skillGaps: career.skillGaps || [],
-        growthPotential: career.growthPotential || 'medium',
-        jobSearch: career.jobSearch || null,
-        color: 'from-teal-500 to-teal-600'
-      }});
+          careerId,
+          title,
+          category,
+          matchScore: Number(career?.matchScore || 0),
+          description:
+            careerDoc?.description ||
+            'Explore this path to grow your career opportunities.',
+          aiInsight,
+          skillGaps,
+          matchedSkills,
+          growthLabel,
+          salaryRange: careerDoc?.salaryRange || null,
+          experienceYearsRange: careerDoc?.experienceYearsRange || null,
+          experienceLevel: careerDoc?.experienceLevel || null,
+          topCompanies: getDefaultCompanies(category),
+          jobSearch: career?.jobSearch || null,
+          remoteFriendly,
+        };
+      });
 
       setCareerMatches(formattedCareers);
 
       if (formattedCareers.length > 0) {
-        const topMatch = formattedCareers[0]?.matchScore || 0;
-        const avgMatch = Math.round(formattedCareers.reduce((sum, c) => sum + (c.matchScore || 0), 0) / formattedCareers.length);
+        const topMatch = Math.max(...formattedCareers.map((item) => item.matchScore || 0));
+        const avgMatch = Math.round(
+          formattedCareers.reduce((sum, item) => sum + (item.matchScore || 0), 0) /
+            formattedCareers.length
+        );
+
         setSummaryStats([
-          { icon: FaTrophy, value: `${topMatch}%`, label: 'Top Match' },
-          { icon: FaArrowUp, value: `${avgMatch}%`, label: 'Avg Match' },
-          { icon: FaBriefcase, value: formattedCareers.length.toString(), label: 'Career Paths' },
+          { label: 'Top Match', value: `${topMatch}%`, tone: 'text-emerald-600' },
+          { label: 'Average Match', value: `${avgMatch}%`, tone: 'text-[#5b5ee7]' },
+          { label: 'Career Paths', value: `${formattedCareers.length}`, tone: 'text-slate-900' },
+          {
+            label: 'New This Week',
+            value: `${Math.min(3, formattedCareers.length)}`,
+            tone: 'text-[#7c3aed]',
+          },
         ]);
       } else {
         setSummaryStats([
-          { icon: FaTrophy, value: '--', label: 'Top Match' },
-          { icon: FaArrowUp, value: '--', label: 'Avg Match' },
-          { icon: FaBriefcase, value: '--', label: 'Career Paths' },
+          { label: 'Top Match', value: '--', tone: 'text-emerald-600' },
+          { label: 'Average Match', value: '--', tone: 'text-[#5b5ee7]' },
+          { label: 'Career Paths', value: '--', tone: 'text-slate-900' },
+          { label: 'New This Week', value: '--', tone: 'text-[#7c3aed]' },
         ]);
       }
     } catch (err) {
       setCareerMatches([]);
-      setSummaryStats([
-        { icon: FaTrophy, value: '--', label: 'Top Match' },
-        { icon: FaArrowUp, value: '--', label: 'Avg Match' },
-        { icon: FaBriefcase, value: '--', label: 'Career Paths' },
-      ]);
-      console.log('Using default recommendations');
+      setError(err.message || 'Failed to load recommendations. Please try refreshing.');
     } finally {
       setLoading(false);
     }
@@ -171,37 +332,17 @@ function CareerRecommendation() {
   const handleGenerateRecommendations = async () => {
     setLoading(true);
     setError('');
-    try {
-      // Fetch resume type
-      try {
-        const resumeResponse = await resumeAPI.getResume();
-        const resumeData = resumeResponse?.data || null;
-        if (resumeData?.resume_type) {
-          setResumeType(resumeData.resume_type);
-        }
-      } catch (err) {
-        console.log('Could not fetch resume type:', err.message);
-      }
 
-      const response = await careerAPI.generateRecommendations();
-      console.log('Generated recommendations:', response);
+    try {
+      await careerAPI.generateRecommendations();
       await loadRecommendations();
     } catch (err) {
-      console.error('Error generating recommendations:', err);
-      
-      // Provide helpful error messages
       let errorMessage = err.message || 'Failed to generate recommendations';
-      
-      if (errorMessage.includes('resume') || errorMessage.includes('Resume')) {
-        errorMessage += '. Please upload your resume in the ATS Scanner first.';
-      } else if (errorMessage.includes('career paths') || errorMessage.includes('No career')) {
-        errorMessage += '. The system needs to be configured with career data. Contact administrator.';
-      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-        errorMessage = 'Please sign in to generate recommendations.';
-      } else if (errorMessage.includes('Network') || errorMessage.includes('timeout')) {
-        errorMessage = 'Connection error. Please check if the backend server is running.';
+
+      if (errorMessage.toLowerCase().includes('resume')) {
+        errorMessage += '. Please upload your resume in ATS Scanner first.';
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -216,12 +357,17 @@ function CareerRecommendation() {
       setDetailsCareer({
         careerName: career?.title || 'Career Details',
         category: career?.category || 'General',
-        description: career?.description || 'Full career details are not available for this recommendation yet.',
+        description: career?.description || 'No details available.',
         matchScore: career?.matchScore || 0,
+        aiInsight: career?.aiInsight || '',
         skillGaps: Array.isArray(career?.skillGaps) ? career.skillGaps : [],
-        growthPotential: career?.growthPotential || 'medium',
+        matchedSkills: Array.isArray(career?.matchedSkills) ? career.matchedSkills : [],
+        salaryRange: career?.salaryRange || null,
+        experienceYearsRange: career?.experienceYearsRange || null,
+        experienceLevel: career?.experienceLevel || null,
+        topCompanies: career?.topCompanies || getDefaultCompanies(career?.category),
         jobSearch: career?.jobSearch || null,
-        isFallbackDetails: true
+        isFallbackDetails: true,
       });
       return;
     }
@@ -234,12 +380,24 @@ function CareerRecommendation() {
     try {
       const response = await careerAPI.getCareerDetails(career.careerId);
       const detail = response?.data || response;
+
       setDetailsCareer({
         ...detail,
+        careerName: detail?.careerName || career.title,
+        category: formatCategoryLabel(detail?.category || career.category),
+        description: detail?.description || career.description,
         matchScore: career.matchScore,
-        skillGaps: career.skillGaps,
-        growthPotential: career.growthPotential,
-        jobSearch: career.jobSearch || null
+        aiInsight: career.aiInsight,
+        matchedSkills:
+          career.matchedSkills?.length > 0
+            ? career.matchedSkills
+            : detail?.requiredSkills?.technical?.slice(0, 5) || [],
+        skillGaps: Array.isArray(career.skillGaps) ? career.skillGaps : [],
+        salaryRange: detail?.salaryRange || career.salaryRange,
+        experienceYearsRange: detail?.experienceYearsRange || career.experienceYearsRange,
+        experienceLevel: detail?.experienceLevel || career.experienceLevel,
+        topCompanies: detail?.topCompanies || career.topCompanies || getDefaultCompanies(career.category),
+        jobSearch: career.jobSearch || detail?.jobSearch || null,
       });
     } catch (err) {
       setDetailsError(err.message || 'Failed to load career details');
@@ -248,281 +406,361 @@ function CareerRecommendation() {
     }
   };
 
+  const filteredCareers = useMemo(() => {
+    const normalizedQuery = searchTerm.trim().toLowerCase();
+
+    return careerMatches.filter((career) => {
+      const matchesQuery =
+        normalizedQuery.length === 0 ||
+        career.title.toLowerCase().includes(normalizedQuery) ||
+        career.category.toLowerCase().includes(normalizedQuery) ||
+        career.description.toLowerCase().includes(normalizedQuery);
+
+      if (!matchesQuery) return false;
+
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'high') return career.matchScore >= 80;
+      if (activeFilter === 'growth') {
+        return career.growthLabel === 'High' || career.growthLabel === 'Very High';
+      }
+      if (activeFilter === 'entry') {
+        const minYears = career.experienceYearsRange?.min;
+        return minYears == null ? career.experienceLevel === 'entry' : minYears <= 1;
+      }
+      if (activeFilter === 'remote') return career.remoteFriendly;
+
+      return true;
+    });
+  }, [careerMatches, searchTerm, activeFilter]);
+
+  const openFindJobs = (career) => {
+    const firstPortal = career?.jobSearch?.job_portals?.[0];
+    const url = firstPortal?.search_url || getFallbackFindJobsUrl(career.title || 'jobs');
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const filterOptions = [
+    { id: 'all', label: 'All' },
+    { id: 'high', label: 'High Match (80%+)' },
+    { id: 'growth', label: 'Growing Demand' },
+    { id: 'entry', label: 'Entry Level' },
+    { id: 'remote', label: 'Remote Friendly' },
+  ];
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-[#f3f4f8]">
       <Sidebar />
-      <div className="flex-1 ml-52 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-200 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
+
+      <div className="ml-52 flex min-h-screen flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-end border-b border-slate-200 bg-white px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white">
-              <FaMapPin className="text-lg" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Career Recommendations</h2>
-              {autoSearchActive && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  <FaGlobe className="inline mr-1" />
-                  Auto-search: {urlParams.career || 'All careers'} 
-                  {urlParams.level && ` • Level: ${urlParams.level}`}
-                  {urlParams.location && ` • Location: ${urlParams.location}`}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
             <button
-              onClick={handleGenerateRecommendations}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50"
+              className="relative rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Notifications"
             >
-              <FaSync className={loading ? 'animate-spin' : ''} />
-              {loading ? 'Generating...' : 'Refresh'}
+              <FaBell className="text-lg" />
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                3
+              </span>
             </button>
-            <Link to="/profile" className="flex items-center gap-4 border-l border-gray-200 pl-6">
-              <img src={userProfile.avatar} alt={userProfile.name} className="w-9 h-9 rounded-full" />
-              <span className="text-sm font-medium text-gray-900">{userProfile.name}</span>
-              <FaChevronDown className="text-gray-400 text-xs" />
-            </Link>
+
+            <StudentProfileDropdown
+              name={userProfile.name}
+              email={user?.email || 'student@demo.com'}
+              avatar={userProfile.avatar}
+              className="border-l border-slate-200 pl-3"
+            />
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-8">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Career Recommendations</h1>
-            <p className="text-gray-600">Based on your skills and interests</p>
-          </div>
 
-          {error && (
-            <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6">
-              {error}
+        <main className="flex-1 overflow-y-auto bg-[#f5f7fb] p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-6xl space-y-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h1 className="text-4xl font-bold leading-none text-slate-900">Career Recommendations</h1>
+                <p className="mt-2 text-slate-600">Personalized career paths based on your profile</p>
+              </div>
+
+              <button
+                onClick={handleGenerateRecommendations}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#5b5ee7] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d50d4] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <FaSync className={loading ? 'animate-spin' : ''} />
+                {loading ? 'Refreshing...' : 'Refresh Recommendations'}
+              </button>
             </div>
-          )}
 
-          {resumeType === 'Non-Technical' && (
-            <div className="bg-orange-50 border-2 border-orange-200 rounded-xl shadow-sm p-8 mb-8">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center text-white shrink-0">
-                  <span className="text-2xl">📊</span>
+            {error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </div>
+            )}
+
+            {resumeType === 'Non-Technical' && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Non-technical resume detected. Recommendations may be less accurate for purely technical paths.
+              </div>
+            )}
+
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {summaryStats.map((stat) => (
+                <article key={stat.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-sm text-slate-500">{stat.label}</p>
+                  <p className={`mt-1 text-4xl font-bold leading-none ${stat.tone}`}>{stat.value}</p>
+                </article>
+              ))}
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <div className="relative lg:w-72">
+                  <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search careers..."
+                    className="w-full rounded-lg border border-slate-200 bg-[#f8fafc] py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-[#5b5ee7]"
+                  />
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Non-Technical Resume Detected</h3>
-                  <p className="text-gray-700">
-                    Your resume appears to be non-technical (HR, Management, Sales, Marketing, Finance, etc.). 
-                    Career recommendations are currently optimized for technical resumes. 
-                  </p>
-                  <p className="text-gray-600 text-sm mt-2">
-                    💡 For non-technical roles, we recommend consulting with a career advisor or exploring industry-specific job boards.
-                  </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {filterOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => setActiveFilter(option.id)}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        activeFilter === option.id
+                          ? 'border-[#5b5ee7] bg-[#f2f1ff] text-[#4a43c7]'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </div>
-          )}
+            </section>
 
-          {careerMatches.length === 0 && !loading && !error && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-8 mb-8">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center text-white shrink-0">
-                  <FaTrophy className="text-2xl" />
-                </div>
+            {!hasResume && (
+              <section className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+                <FaExclamationCircle className="mt-0.5 shrink-0" />
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Get Your Career Recommendations</h3>
-                  <p className="text-gray-600 mb-4">
-                    Click the <strong>Refresh</strong> button above to generate personalized career recommendations based on your resume and skills.
-                  </p>
-                  <div className="bg-white rounded-lg p-4 border border-blue-100">
-                    <p className="text-sm text-gray-700 font-semibold mb-2">📋 Before you start:</p>
-                    <ol className="list-decimal list-inside text-sm text-gray-600 space-y-1">
-                      <li>Upload your resume in the <Link to="/ats-scanner" className="text-purple-600 hover:underline">ATS Scanner</Link></li>
-                      <li>Complete your profile with skills and interests</li>
-                      <li>Click the Refresh button to generate matches</li>
-                    </ol>
-                  </div>
+                  <p className="font-semibold">Upload your resume for better matches</p>
+                  <p className="text-sm text-amber-700">We can provide more accurate career recommendations if you upload your resume for analysis.</p>
                 </div>
-              </div>
-            </div>
-          )}
+              </section>
+            )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-            {careerMatches.map((career, i) => {
-              const Icon = career.icon;
-              return (
-                <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start gap-4">
-                      <div className="w-14 h-14 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600">
-                        <Icon className="text-2xl" />
-                      </div>
+            {!loading && filteredCareers.length === 0 && (
+              <section className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
+                No career recommendations found. Try refreshing recommendations or adjusting filters.
+              </section>
+            )}
+
+            <section className="grid gap-4 lg:grid-cols-2">
+              {filteredCareers.map((career) => {
+                const growthTone = getGrowthTone(career.growthLabel);
+
+                return (
+                  <article key={`${career.careerId || career.title}-${career.matchScore}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-lg font-bold text-gray-900">{career.title}</h3>
-                        <p className="text-sm text-gray-500">{career.category}</p>
+                        <h3 className="text-3xl font-bold leading-none text-slate-900">{career.title}</h3>
+                        <span className="mt-2 inline-block rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                          {career.category}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-5xl font-bold leading-none text-emerald-600">{career.matchScore}%</p>
+                        <p className="mt-1 text-xs text-slate-500">Match</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-teal-600">{career.matchScore}%</p>
-                      <p className="text-xs text-gray-500">Match</p>
-                    </div>
-                  </div>
-                  <p className="text-gray-600 text-sm mb-4">{career.description}</p>
-                  <div className="flex justify-between text-sm mb-4">
-                    <div>
-                      <p className="text-gray-500">Growth</p>
-                      <p className="font-semibold capitalize">{career.growthPotential}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Skill Gaps</p>
-                      <p className="font-semibold">{career.skillGaps.length}</p>
-                    </div>
-                  </div>
-                  {career.jobSearch?.job_portals?.length > 0 ? (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-                        <span className="font-semibold text-gray-700">Job Options</span>
-                        <span className="text-xs text-gray-500">{career.jobSearch.job_level}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {career.jobSearch.job_portals.map((portal) => (
-                          <a
-                            key={`${career.careerId}-${portal.portal_name}`}
-                            href={portal.search_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1 rounded-full border border-teal-200 text-teal-700 text-xs font-semibold hover:bg-teal-50"
-                          >
-                            {portal.portal_name}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-500 mb-4">
-                      Job portal links will appear after refreshing recommendations.
-                    </p>
-                  )}
-                  <button
-                    onClick={() => handleViewDetails(career)}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition"
-                  >
-                    View Details
-                  </button>
-                </div>
-              );
-            })}
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {summaryStats.map((stat, i) => {
-              const Icon = stat.icon;
-              return (
-                <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <Icon className="text-3xl text-purple-600 mb-3" />
-                  <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
-                  <p className="text-gray-600">{stat.label}</p>
-                </div>
-              );
-            })}
+                    <p className="mt-4 min-h-12 text-sm leading-7 text-slate-600">{career.description}</p>
+
+                    <div className="mt-4 rounded-lg border border-[#dddafc] bg-[#f4f3ff] p-3">
+                      <p className="text-sm text-slate-700">
+                        <span className="mr-1 inline-flex items-center text-[#5b5ee7]">◎</span>
+                        {career.aiInsight}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-slate-500">Growth</p>
+                        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${growthTone}`}>
+                          {career.growthLabel}
+                        </span>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-500">Salary Range</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-800">{formatSalaryRange(career.salaryRange)}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-500">Experience</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-800">
+                          {formatExperienceRange(career.experienceYearsRange, career.experienceLevel)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-500">Skill Gaps</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-800">{career.skillGaps.length} skills</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleViewDetails(career)}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => openFindJobs(career)}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#6d5ef7] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#5a4ee0]"
+                      >
+                        <FaExternalLinkAlt className="text-xs" />
+                        Find Jobs
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
           </div>
         </main>
       </div>
 
       {detailsOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetailsOpen(false)}>
+          <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setDetailsOpen(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+              className="absolute right-8 top-8 text-slate-500 transition hover:text-slate-700"
               aria-label="Close"
             >
-              X
+              <FaTimes className="text-xl" />
             </button>
 
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              {detailsCareer?.careerName || detailsCareer?.name || 'Career Details'}
-            </h3>
-
-            {detailsLoading && (
-              <p className="text-gray-600">Loading details...</p>
-            )}
+            {detailsLoading && <p className="text-slate-600">Loading details...</p>}
 
             {!detailsLoading && detailsError && (
-              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg">
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {detailsError}
               </div>
             )}
 
             {!detailsLoading && detailsCareer && (
-              <div className="space-y-4">
-                {detailsCareer.isFallbackDetails && (
-                  <div className="bg-amber-50 text-amber-800 px-4 py-3 rounded-lg text-sm">
-                    Showing recommendation-based details. Full career catalog details are not available for this item yet.
-                  </div>
-                )}
+              <div className="space-y-6">
+                <header>
+                  <h3 className="text-5xl font-bold leading-none text-slate-900">
+                    {detailsCareer.careerName || detailsCareer.name || 'Career Details'}
+                  </h3>
+                  <p className="mt-2 text-lg text-slate-500">
+                    {detailsCareer.category || 'General'} • {detailsCareer.matchScore || 0}% Match
+                  </p>
+                </header>
 
-                <div className="flex gap-6 text-sm text-gray-600">
-                  <span>Category: <strong className="text-gray-900">{detailsCareer.category || 'General'}</strong></span>
-                  <span>Match: <strong className="text-gray-900">{detailsCareer.matchScore || 0}%</strong></span>
-                  <span>Growth: <strong className="text-gray-900 capitalize">{detailsCareer.growthPotential || 'medium'}</strong></span>
-                </div>
+                <section>
+                  <h4 className="text-2xl font-bold text-slate-900">About This Role</h4>
+                  <p className="mt-2 text-lg leading-8 text-slate-600">
+                    {detailsCareer.description || 'No description available for this role.'}
+                  </p>
+                </section>
 
-                {detailsCareer.description && (
-                  <p className="text-gray-700">{detailsCareer.description}</p>
-                )}
+                <section className="rounded-xl border border-[#dddafc] bg-[#f4f3ff] p-4">
+                  <h4 className="text-2xl font-bold text-slate-900">◎ AI Career Insight</h4>
+                  <p className="mt-2 text-lg leading-8 text-slate-700">{detailsCareer.aiInsight || 'Career insight is not available for this role yet.'}</p>
+                </section>
 
-                {detailsCareer.requiredSkills && (
+                <section className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Required Skills</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {(detailsCareer.requiredSkills.technical || []).map((skill, idx) => (
-                        <span key={`tech-${idx}`} className="px-3 py-1 bg-teal-50 text-teal-700 rounded-full text-xs">
-                          {skill}
-                        </span>
-                      ))}
-                      {(detailsCareer.requiredSkills.soft || []).map((skill, idx) => (
-                        <span key={`soft-${idx}`} className="px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-xs">
-                          {skill}
-                        </span>
-                      ))}
+                    <h4 className="inline-flex items-center gap-2 text-2xl font-bold text-slate-900">
+                      <FaCheckCircle className="text-emerald-500" />
+                      Your Matched Skills
+                    </h4>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(detailsCareer.matchedSkills || []).length > 0 ? (
+                        (detailsCareer.matchedSkills || []).map((skill, idx) => (
+                          <span key={`matched-${idx}`} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+                            {skill}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-500">No matched skills available yet.</p>
+                      )}
                     </div>
                   </div>
-                )}
 
-                {Array.isArray(detailsCareer.skillGaps) && detailsCareer.skillGaps.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Your Skill Gaps</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {detailsCareer.skillGaps.map((skill, idx) => (
-                        <span key={`gap-${idx}`} className="px-3 py-1 bg-yellow-50 text-yellow-700 rounded-full text-xs">
-                          {skill}
-                        </span>
-                      ))}
+                    <h4 className="inline-flex items-center gap-2 text-2xl font-bold text-slate-900">
+                      <FaTimesCircle className="text-amber-500" />
+                      Skills to Learn
+                    </h4>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(detailsCareer.skillGaps || []).length > 0 ? (
+                        (detailsCareer.skillGaps || []).map((skill, idx) => (
+                          <span key={`gap-${idx}`} className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-700">
+                            {skill}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-500">No major skill gaps detected.</p>
+                      )}
                     </div>
                   </div>
-                )}
+                </section>
 
-                {detailsCareer.salaryRange && (
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Salary Range</h4>
-                    <p className="text-gray-700">
-                      {detailsCareer.salaryRange.min || detailsCareer.salaryRange.minimum || 'N/A'} - {detailsCareer.salaryRange.max || detailsCareer.salaryRange.maximum || 'N/A'}
-                    </p>
+                <section>
+                  <h4 className="text-2xl font-bold text-slate-900">Top Hiring Companies</h4>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(detailsCareer.topCompanies || []).map((company, idx) => (
+                      <span key={`company-${idx}`} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-700">
+                        <FaBuilding className="text-xs text-slate-500" />
+                        {company}
+                      </span>
+                    ))}
                   </div>
-                )}
+                </section>
 
-                {detailsCareer.jobSearch?.job_portals?.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Job Portal Links</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {detailsCareer.jobSearch.job_portals.map((portal) => (
+                <section>
+                  <h4 className="text-2xl font-bold text-slate-900">Find Jobs On</h4>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {detailsCareer.jobSearch?.job_portals?.length > 0 ? (
+                      detailsCareer.jobSearch.job_portals.map((portal) => (
                         <a
-                          key={`details-${portal.portal_name}`}
+                          key={`portal-${portal.portal_name}`}
                           href={portal.search_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-3 py-1 rounded-full border border-purple-200 text-purple-700 text-xs font-semibold hover:bg-purple-50"
+                          className="inline-flex items-center gap-2 rounded-lg border border-[#d9d6ff] bg-[#f7f6ff] px-3 py-1.5 text-sm font-semibold text-[#4a43c7] transition hover:bg-[#efecff]"
                         >
+                          <FaExternalLinkAlt className="text-xs" />
                           {portal.portal_name}
                         </a>
-                      ))}
-                    </div>
+                      ))
+                    ) : (
+                      <a
+                        href={getFallbackFindJobsUrl(detailsCareer.careerName || 'jobs')}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-[#d9d6ff] bg-[#f7f6ff] px-3 py-1.5 text-sm font-semibold text-[#4a43c7] transition hover:bg-[#efecff]"
+                      >
+                        <FaExternalLinkAlt className="text-xs" />
+                        Google Jobs Search
+                      </a>
+                    )}
                   </div>
+                </section>
+
+                {detailsCareer.isFallbackDetails && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                    Showing recommendation-based details. Full catalog details are not available for this item yet.
+                  </p>
                 )}
               </div>
             )}

@@ -3,444 +3,225 @@ import Header from "../components/Header";
 import { Link } from "react-router-dom";
 import {
   FaArrowRight,
-  FaBolt,
-  FaBrain,
+  FaBullseye,
   FaChartLine,
-  FaCheckCircle,
   FaComments,
-  FaCompass,
   FaFileAlt,
-  FaLaptopCode,
-  FaRobot,
-  FaSearch,
-  FaUpload,
-  FaUserGraduate,
+  FaLightbulb,
 } from "react-icons/fa";
 
-const trustMetrics = [
-  { value: "30K+", label: "Resumes reviewed" },
-  { value: "94%", label: "ATS readiness lift" },
-  { value: "12 min", label: "Average setup time" },
-  { value: "4.8/5", label: "Student satisfaction" },
+const heroCards = [
+  {
+    title: "ATS Resume Score",
+    subtitle: "Optimized for success",
+    value: "92%",
+    icon: FaFileAlt,
+    tone: "border-[#d8ddff] bg-[#eef2ff]",
+    iconTone: "bg-[#5047ec] text-white",
+    valueTone: "text-[#059669]",
+  },
+  {
+    title: "Career Match",
+    subtitle: "Personalized for you",
+    value: "88%",
+    icon: FaBullseye,
+    tone: "border-[#bde8d4] bg-[#dff7ea]",
+    iconTone: "bg-[#0ea371] text-white",
+    valueTone: "text-[#059669]",
+  },
+  {
+    title: "AI Insights",
+    subtitle: "Smart recommendations",
+    value: "Ready",
+    icon: FaLightbulb,
+    tone: "border-[#d3e3ff] bg-[#eaf1ff]",
+    iconTone: "bg-[#2864e5] text-white",
+    valueTone: "text-[#2864e5]",
+  },
+];
+
+const trustStats = [
+  { value: "10K+", label: "Students Guided" },
+  { value: "95%", label: "Success Rate" },
+  { value: "500+", label: "Career Paths" },
 ];
 
 const featureCards = [
   {
-    title: "Career Recommendation Engine",
+    title: "ATS Resume Scanner",
     description:
-      "Receive role suggestions aligned to your profile, strengths, and real market demand.",
-    icon: FaChartLine,
-    tone: "bg-[#eef5fc] border-[#d6e4f2]",
-    iconTone: "bg-[#dce9f7] text-[#155b9a]",
-    delayClass: "reveal-delay-1",
+      "Optimize your resume with AI-powered ATS scoring and get actionable improvement suggestions.",
+    icon: FaFileAlt,
+    iconTone: "bg-[#5146ff]",
   },
   {
-    title: "Skill Gap Intelligence",
+    title: "Career Recommendations",
     description:
-      "Understand what is missing for your target role and prioritize what to learn next.",
-    icon: FaBrain,
-    tone: "bg-[#f1f6fc] border-[#dbe6f2]",
-    iconTone: "bg-[#dce9f7] text-[#155b9a]",
-    delayClass: "reveal-delay-2",
+      "Get personalized career paths based on your skills, interests, and market demand.",
+    icon: FaBullseye,
+    iconTone: "bg-[#0ea371]",
   },
   {
-    title: "AI Career Copilot",
+    title: "AI Chatbot Coach",
     description:
-      "Ask career questions, test interview ideas, and get practical answers any time.",
+      "24/7 AI guidance for career questions, interview prep, and skill development advice.",
     icon: FaComments,
-    tone: "bg-[#edf4fb] border-[#d5e2f0]",
-    iconTone: "bg-[#dce9f7] text-[#155b9a]",
-    delayClass: "reveal-delay-3",
+    iconTone: "bg-[#2864e5]",
+  },
+  {
+    title: "Skill Gap Analysis",
+    description:
+      "Identify missing skills for your dream career and get a personalized learning roadmap.",
+    icon: FaChartLine,
+    iconTone: "bg-[#db2777]",
   },
 ];
 
-const workflowSteps = [
+const steps = [
   {
+    number: "1",
     title: "Create Your Profile",
-    description: "Set your interests, experience level, and preferred career direction.",
-    icon: FaUserGraduate,
+    description:
+      "Sign up and complete your profile with your skills, education, and career interests.",
+    tone: "bg-[#5146ff]",
   },
   {
-    title: "Upload Resume",
-    description: "Submit your resume to evaluate ATS structure, keywords, and clarity.",
-    icon: FaUpload,
+    number: "2",
+    title: "Upload Your Resume",
+    description:
+      "Get instant ATS scoring and personalized career recommendations based on your experience.",
+    tone: "bg-[#0ea371]",
   },
   {
-    title: "Get AI Analysis",
-    description: "Receive role matches, skill gap insights, and focused improvement tips.",
-    icon: FaRobot,
-  },
-  {
-    title: "Take Action",
-    description: "Follow your plan and track progress toward stronger job-market readiness.",
-    icon: FaCompass,
+    number: "3",
+    title: "Get Job-Ready",
+    description:
+      "Follow your personalized roadmap, improve your skills, and apply with confidence.",
+    tone: "bg-[#2864e5]",
   },
 ];
 
-const impactBullets = [
-  "Resume feedback mapped to ATS signals and keyword intent",
-  "Roadmaps built from your profile, not generic templates",
-  "Continuous guidance from chatbot conversations and updates",
-  "Clear next steps for internships, graduate roles, and placements",
-];
-
-const insightCards = [
+const resultCards = [
   {
-    title: "Weekly Momentum",
-    value: "+27%",
-    description: "Average improvement in interview callback confidence after guided actions.",
-    icon: FaLaptopCode,
+    value: "10,000+",
+    label: "Students Successfully Guided",
+    tone: "bg-[#edf0ff] border-[#d8ddff] text-[#5146ff]",
   },
   {
-    title: "Priority Skills",
-    value: "Top 5",
-    description: "Most impactful skills highlighted for your target role in one view.",
-    icon: FaBrain,
+    value: "85%",
+    label: "Average ATS Score Improvement",
+    tone: "bg-[#e2f7ea] border-[#bde8d4] text-[#0a8f62]",
   },
   {
-    title: "Role Alignment",
-    value: "92%",
-    description: "Career matches ranked by skill fit, demand trend, and profile relevance.",
-    icon: FaCompass,
+    value: "95%",
+    label: "Student Satisfaction Rate",
+    tone: "bg-[#fff4d8] border-[#f6df98] text-[#d97706]",
   },
 ];
-
-const heroPhotos = {
-  primary: {
-    src: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1400&q=80",
-    alt: "University students discussing a career plan",
-  },
-  resumeReview: {
-    src: "https://images.unsplash.com/photo-1488190211105-8b0e65b80b4e?auto=format&fit=crop&w=1000&q=80",
-    alt: "Student reviewing resume notes on a laptop",
-  },
-  mentorship: {
-    src: "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=1000&q=80",
-    alt: "Mentor guiding students during a discussion",
-  },
-};
 
 function LandingPage() {
   return (
-    <div className="landing-shell">
+    <div className="landing-shell min-h-screen">
       <Header />
 
       <main>
-        <section className="landing-hero relative overflow-hidden py-12 sm:py-16 lg:py-20">
-          <div className="landing-container grid items-center gap-10 xl:gap-16 lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="py-12 sm:py-14 lg:py-16">
+          <div className="landing-container grid gap-10 lg:grid-cols-[minmax(0,1.02fr)_minmax(320px,0.98fr)] lg:items-center">
             <div className="reveal-rise">
-              <span className="inline-flex items-center rounded-full border border-[#cddff1] bg-[#e9f2fb] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#155b9a]">
-                AI Career Intelligence For Students
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#d7ddff] bg-[#eef1ff] px-4 py-2 text-xs font-semibold text-[#5146ff]">
+                AI-Powered Career Guidance
               </span>
 
-              <h1 className="landing-display mt-6 max-w-3xl text-4xl leading-[1.05] text-slate-900 sm:text-5xl lg:text-6xl">
-                Stop guessing your future.
-                <span className="mt-2 block text-[#155b9a]">
-                  Build a career path with proof.
-                </span>
+              <h1 className="landing-display mt-6 max-w-2xl text-[2.45rem] font-bold leading-[1.05] text-[#111827] sm:text-[3.25rem] lg:text-[4rem]">
+                Your Path to a
+                <span className="block text-[#5146ff]">Successful</span>
+                <span className="block text-[#5146ff]">Career</span>
+                Starts Here
               </h1>
 
-              <p className="mt-6 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
-                Smart Career turns your resume, interests, and goals into a practical action map.
-                Scan for ATS issues, uncover skill gaps, and get role-specific guidance in minutes.
+              <p className="mt-5 max-w-xl text-base leading-8 text-[#526274] sm:text-lg">
+                Get personalized career recommendations, optimize your resume for ATS systems,
+                identify skill gaps, and receive AI-powered guidance to become job-ready.
               </p>
 
-              <div className="mt-8 flex flex-wrap items-center gap-3">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
                   to="/getstarted"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#155b9a] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#124b80] sm:w-auto sm:text-base"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#5146ff] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#4338ca] sm:text-base"
                 >
-                  Launch Your Career Map
-                  <FaArrowRight className="text-xs sm:text-sm" />
+                  Start Your Journey
+                  <FaArrowRight className="text-xs" />
                 </Link>
-                <a
-                  href="#features"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-6 py-3 text-center text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 sm:w-auto sm:text-base"
+                <Link
+                  to="/signin"
+                  className="inline-flex items-center justify-center rounded-xl border border-[#c7cdf7] bg-white px-6 py-3 text-sm font-semibold text-[#5146ff] transition hover:border-[#5146ff] sm:text-base"
                 >
-                  Explore Features
-                </a>
+                  Sign In
+                </Link>
               </div>
 
-              <div className="mt-9 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-                <div className="landing-surface rounded-2xl bg-[#eef6ff] p-4">
-                  <p className="landing-display text-2xl font-bold text-slate-900">94%</p>
-                  <p className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">ATS readiness lift</p>
-                </div>
-
-                <div className="landing-surface rounded-2xl bg-[#f2f7fd] p-4">
-                  <p className="landing-display text-2xl font-bold text-slate-900">4x</p>
-                  <p className="mt-1 flex items-center gap-1 text-xs font-medium text-slate-500 sm:text-sm">
-                    <FaBolt className="text-[#155b9a]" />
-                    Faster planning
-                  </p>
-                </div>
-
-                <div className="landing-surface rounded-2xl bg-[#ecf4fb] p-4">
-                  <p className="landing-display text-2xl font-bold text-slate-900">24/7</p>
-                  <p className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">AI support access</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative reveal-rise reveal-delay-1">
-              <div className="landing-surface rounded-[30px] p-5 sm:p-6">
-                <div className="grid gap-3">
-                  <div className="overflow-hidden rounded-3xl border border-[#d7e4f2]">
-                    <img
-                      src={heroPhotos.primary.src}
-                      alt={heroPhotos.primary.alt}
-                      className="h-64 w-full object-cover sm:h-[20rem] lg:h-[22rem]"
-                      loading="eager"
-                      decoding="async"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="overflow-hidden rounded-2xl border border-[#d7e4f2]">
-                      <img
-                        src={heroPhotos.resumeReview.src}
-                        alt={heroPhotos.resumeReview.alt}
-                        className="h-28 w-full object-cover sm:h-32"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
-                    <div className="overflow-hidden rounded-2xl border border-[#d7e4f2]">
-                      <img
-                        src={heroPhotos.mentorship.src}
-                        alt={heroPhotos.mentorship.alt}
-                        className="h-28 w-full object-cover sm:h-32"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-[#cfe0f3] bg-[#eef6ff] p-3 sm:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-[#155b9a]">Career Match</p>
-                    <p className="landing-display mt-1 text-3xl font-bold text-slate-900">92%</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-[#d7e4f4] bg-[#f2f7fd] p-3 sm:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-[#155b9a]">Skill Coverage</p>
-                    <p className="landing-display mt-1 text-3xl font-bold text-slate-900">12/15</p>
-                  </div>
-                </div>
-
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-[#f8fbff] p-4">
-                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                    <span>Action Progress</span>
-                    <span className="text-[#155b9a]">80%</span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full w-[80%] rounded-full bg-[#155b9a]" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="landing-surface absolute -bottom-8 left-4 hidden rounded-2xl px-4 py-3 shadow-xl sm:block">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Weekly Growth Plan</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">3 high-impact skills queued</p>
-              </div>
-
-              <div className="landing-surface absolute -right-4 -top-6 hidden rounded-2xl px-4 py-3 shadow-xl md:block">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Resume Score</p>
-                <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <FaFileAlt className="text-cyan-600" />
-                  91 / 100
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="pb-20 sm:pb-24">
-          <div className="landing-container">
-            <div className="landing-surface reveal-rise reveal-delay-2 rounded-3xl px-6 py-7 sm:px-8">
-              <p className="text-center text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Trusted By Students Building Competitive Profiles
-              </p>
-
-              <div className="mt-6 grid grid-cols-2 gap-6 text-center md:grid-cols-4">
-                {trustMetrics.map((metric) => (
-                  <div key={metric.label}>
-                    <p className="landing-display text-3xl font-bold text-slate-900">{metric.value}</p>
-                    <p className="mt-1 text-sm font-medium text-slate-500">{metric.label}</p>
+              <div className="mt-10 grid max-w-md grid-cols-3 gap-3 sm:max-w-lg sm:gap-6">
+                {trustStats.map((item) => (
+                  <div key={item.label}>
+                    <p className="landing-display text-3xl font-bold text-[#5146ff]">{item.value}</p>
+                    <p className="mt-1 text-sm text-[#6b7a8f]">{item.label}</p>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-        </section>
 
-        <section id="features" className="pb-20 lg:pb-24">
-          <div className="landing-container">
-            <div className="mb-10 max-w-3xl reveal-rise">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#155b9a]">Platform Features</span>
-              <h2 className="landing-display mt-3 text-3xl font-bold text-slate-900 sm:text-4xl lg:text-5xl">
-                A complete career toolkit in one focused workspace
-              </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
-                Designed to remove noise and deliver clear decisions from resume optimization to
-                guided role discovery.
-              </p>
-            </div>
+            <div className="reveal-rise reveal-delay-1">
+              <div className="landing-surface rounded-3xl border-[#e2e7ef] bg-white p-4 shadow-[0_24px_55px_rgba(15,23,42,0.14)] sm:p-5">
+                <div className="space-y-3">
+                  {heroCards.map((card) => {
+                    const Icon = card.icon;
 
-            <div className="grid gap-6 lg:grid-cols-12">
-              <article className="landing-surface reveal-rise rounded-3xl bg-[#f7fbff] p-8 lg:col-span-7">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#155b9a]">Core Feature</p>
-                    <h3 className="landing-display mt-2 text-3xl font-bold text-slate-900">ATS Resume Scanner</h3>
-                  </div>
-                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#dce9f7] text-2xl text-[#155b9a]">
-                    <FaSearch />
-                  </span>
-                </div>
-
-                <p className="mt-5 max-w-2xl text-slate-600">
-                  Detect formatting weaknesses, missing role keywords, and readability issues that
-                  can block your resume before a recruiter reads it.
-                </p>
-
-                <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-[#cfe0f3] bg-[#eef6ff] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Keyword Match</p>
-                    <p className="landing-display mt-1 text-2xl font-bold text-slate-900">89%</p>
-                  </div>
-                  <div className="rounded-2xl border border-[#d7e4f4] bg-[#f2f7fd] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Format Score</p>
-                    <p className="landing-display mt-1 text-2xl font-bold text-slate-900">93%</p>
-                  </div>
-                  <div className="rounded-2xl border border-[#dbe5f2] bg-[#f5f8fc] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Action Tips</p>
-                    <p className="landing-display mt-1 text-2xl font-bold text-slate-900">12</p>
-                  </div>
-                </div>
-
-                <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                  <div className="flex items-center gap-2 rounded-xl bg-[#f3f7fc] px-4 py-3 text-sm font-medium text-slate-700">
-                    <FaCheckCircle className="text-[#155b9a]" />
-                    ATS-safe section structure
-                  </div>
-                  <div className="flex items-center gap-2 rounded-xl bg-[#f3f7fc] px-4 py-3 text-sm font-medium text-slate-700">
-                    <FaCheckCircle className="text-[#155b9a]" />
-                    Job-specific keyword guidance
-                  </div>
-                </div>
-              </article>
-
-              <div className="grid gap-6 lg:col-span-5">
-                {featureCards.map((feature) => {
-                  const Icon = feature.icon;
-
-                  return (
-                    <article
-                      key={feature.title}
-                      className={`landing-surface reveal-rise ${feature.delayClass} rounded-3xl p-6 ${feature.tone}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <h3 className="landing-display text-2xl font-bold text-slate-900">{feature.title}</h3>
-                        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl ${feature.iconTone}`}>
-                          <Icon />
-                        </span>
+                    return (
+                      <div
+                        key={card.title}
+                        className={`flex items-center justify-between gap-4 rounded-2xl border p-4 ${card.tone}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.iconTone}`}>
+                            <Icon />
+                          </span>
+                          <div>
+                            <p className="text-sm font-bold text-[#1f2937] sm:text-base">{card.title}</p>
+                            <p className="text-xs text-[#5d6c80] sm:text-sm">{card.subtitle}</p>
+                          </div>
+                        </div>
+                        <div className={`text-lg font-bold sm:text-2xl ${card.valueTone}`}>{card.value}</div>
                       </div>
-                      <p className="mt-4 text-sm leading-relaxed text-slate-600">{feature.description}</p>
-                    </article>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section id="process" className="pb-20 lg:pb-24">
+        <section id="features" className="bg-white py-16 sm:py-20">
           <div className="landing-container">
-            <div className="mb-10 max-w-3xl reveal-rise">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#155b9a]">How It Works</span>
-              <h2 className="landing-display mt-3 text-3xl font-bold text-slate-900 sm:text-4xl lg:text-5xl">
-                Four simple steps to career clarity
-              </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
-                Every stage is structured to reduce confusion and move you toward confident job
-                applications.
-              </p>
+            <div className="mx-auto max-w-3xl text-center reveal-rise">
+              <h2 className="landing-display text-3xl font-bold text-[#111827] sm:text-4xl">Everything You Need to Succeed</h2>
+              <p className="mt-3 text-base text-[#6b7a8f] sm:text-lg">Powerful tools to help you become job-ready</p>
             </div>
 
-            <div className="relative grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              <div className="pointer-events-none absolute left-0 right-0 top-8 hidden h-px bg-[#d8e3f0] xl:block" />
-
-              {workflowSteps.map((step, index) => {
-                const Icon = step.icon;
-
-                return (
-                  <article key={step.title} className="landing-surface reveal-rise rounded-3xl p-6">
-                    <div className="relative mb-5 flex items-center justify-between">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#155b9a] text-lg text-white">
-                        <Icon />
-                      </span>
-                      <span className="landing-display text-3xl font-bold text-slate-200">0{index + 1}</span>
-                    </div>
-                    <h3 className="landing-display text-2xl font-bold text-slate-900">{step.title}</h3>
-                    <p className="mt-3 text-sm leading-relaxed text-slate-600">{step.description}</p>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <section id="outcomes" className="pb-20 lg:pb-24">
-          <div className="landing-container grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <article className="reveal-rise rounded-3xl bg-[#0f243d] p-8 text-slate-100 shadow-xl sm:p-10">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#9ec8f0]">What You Get</span>
-              <h2 className="landing-display mt-3 text-3xl font-bold text-white sm:text-4xl">
-                Data-backed direction, not random career advice
-              </h2>
-              <p className="mt-4 max-w-2xl text-slate-300">
-                Smart Career connects analysis, recommendations, and action so you can make stronger
-                decisions with confidence.
-              </p>
-
-              <ul className="mt-8 space-y-4">
-                {impactBullets.map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <FaCheckCircle className="mt-0.5 shrink-0 text-[#9ec8f0]" />
-                    <span className="text-sm leading-relaxed text-slate-200">{item}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                to="/getstarted"
-                className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-[#e9f3ff]"
-              >
-                Start Building Your Plan
-                <FaArrowRight className="text-xs" />
-              </Link>
-            </article>
-
-            <div className="grid gap-5">
-              {insightCards.map((card, index) => {
-                const Icon = card.icon;
+            <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+              {featureCards.map((feature, index) => {
+                const Icon = feature.icon;
+                const delayClass = index === 0 ? "" : index === 1 ? "reveal-delay-1" : "reveal-delay-2";
 
                 return (
                   <article
-                    key={card.title}
-                    className={`landing-surface reveal-rise ${index === 0 ? "reveal-delay-1" : index === 1 ? "reveal-delay-2" : "reveal-delay-3"} rounded-3xl p-6`}
+                    key={feature.title}
+                    className={`reveal-rise ${delayClass} rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_12px_35px_rgba(15,23,42,0.06)]`}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{card.title}</p>
-                        <p className="landing-display mt-2 text-4xl font-bold text-slate-900">{card.value}</p>
-                      </div>
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#dce9f7] text-xl text-[#155b9a]">
-                        <Icon />
-                      </span>
-                    </div>
-                    <p className="mt-4 text-sm leading-relaxed text-slate-600">{card.description}</p>
+                    <span className={`flex h-12 w-12 items-center justify-center rounded-xl text-white ${feature.iconTone}`}>
+                      <Icon />
+                    </span>
+                    <h3 className="landing-display mt-4 text-2xl font-bold text-[#1f2937]">{feature.title}</h3>
+                    <p className="mt-2 text-sm leading-7 text-[#526274] sm:text-base">{feature.description}</p>
                   </article>
                 );
               })}
@@ -448,31 +229,70 @@ function LandingPage() {
           </div>
         </section>
 
-        <section className="pb-20 pt-4 lg:pb-24">
+        <section id="process" className="py-16 sm:py-20">
           <div className="landing-container">
-            <div className="reveal-rise rounded-[34px] bg-[#155b9a] px-8 py-14 text-center text-white shadow-xl sm:px-12">
-              <h2 className="landing-display text-3xl font-bold sm:text-4xl lg:text-5xl">
-                Ready to turn career confusion into momentum?
-              </h2>
-              <p className="mx-auto mt-4 max-w-2xl text-base text-slate-100 sm:text-lg">
-                Join students who are using structured AI guidance to improve resumes, skills, and
-                role-fit decisions faster.
-              </p>
+            <div className="mx-auto max-w-3xl text-center reveal-rise">
+              <h2 className="landing-display text-3xl font-bold text-[#111827] sm:text-4xl">How It Works</h2>
+              <p className="mt-3 text-base text-[#6b7a8f] sm:text-lg">Your journey to success in three simple steps</p>
+            </div>
 
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Link
-                  to="/getstarted"
-                  className="rounded-xl bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 sm:text-base"
-                >
-                  Get Started Free
-                </Link>
-                <Link
-                  to="/signup"
-                  className="rounded-xl border border-white bg-[#155b9a] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#124b80] sm:text-base"
-                >
-                  Create Account
-                </Link>
-              </div>
+            <div className="mt-12 grid gap-8 md:grid-cols-3">
+              {steps.map((step, index) => {
+                const delayClass = index === 0 ? "" : index === 1 ? "reveal-delay-1" : "reveal-delay-2";
+
+                return (
+                  <article key={step.title} className={`reveal-rise ${delayClass} text-center`}>
+                    <span className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold text-white ${step.tone}`}>
+                      {step.number}
+                    </span>
+                    <h3 className="landing-display mt-5 text-3xl font-bold text-[#1f2937]">{step.title}</h3>
+                    <p className="mx-auto mt-3 max-w-sm text-sm leading-7 text-[#526274] sm:text-base">{step.description}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section id="outcomes" className="bg-white py-16 sm:py-20">
+          <div className="landing-container">
+            <div className="mx-auto max-w-3xl text-center reveal-rise">
+              <h2 className="landing-display text-3xl font-bold text-[#111827] sm:text-4xl">Proven Results</h2>
+              <p className="mt-3 text-base text-[#6b7a8f] sm:text-lg">Real outcomes from students like you</p>
+            </div>
+
+            <div className="mt-10 grid gap-5 lg:grid-cols-3">
+              {resultCards.map((result, index) => {
+                const delayClass = index === 0 ? "" : index === 1 ? "reveal-delay-1" : "reveal-delay-2";
+
+                return (
+                  <article
+                    key={result.label}
+                    className={`reveal-rise ${delayClass} rounded-2xl border p-8 text-center ${result.tone}`}
+                  >
+                    <p className="landing-display text-5xl font-bold">{result.value}</p>
+                    <p className="mt-3 text-sm font-semibold text-[#5d6c80] sm:text-base">{result.label}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="pb-16 pt-12 sm:pb-20 sm:pt-16">
+          <div className="landing-container">
+            <div className="reveal-rise rounded-4xl bg-[linear-gradient(135deg,#5146ff_0%,#4338ca_100%)] px-6 py-12 text-center text-white shadow-[0_24px_55px_rgba(79,70,229,0.35)] sm:px-8 sm:py-14">
+              <h2 className="landing-display text-3xl font-bold sm:text-4xl lg:text-[3.2rem]">Ready to Start Your Career Journey?</h2>
+              <p className="mx-auto mt-4 max-w-3xl text-base leading-8 text-[#e6e9ff] sm:text-lg">
+                Join thousands of students who have successfully launched their careers with our AI-powered guidance.
+              </p>
+              <Link
+                to="/getstarted"
+                className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-[#4338ca] transition hover:bg-[#eef1ff] sm:text-base"
+              >
+                Get Started For Free
+                <FaArrowRight className="text-xs" />
+              </Link>
             </div>
           </div>
         </section>

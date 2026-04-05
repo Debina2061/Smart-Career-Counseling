@@ -1,44 +1,33 @@
-import { FaGithub, FaInstagram, FaLinkedinIn } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { FaGraduationCap } from "react-icons/fa";
 
-const quickLinks = [
-  { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#process" },
-  { label: "Outcomes", href: "#outcomes" },
-];
-
-const accountLinks = [
-  { label: "Get Started", to: "/getstarted" },
-  { label: "Sign Up", to: "/signup" },
-  { label: "Sign In", to: "/signin" },
-];
-
-const socialLinks = [
-  { label: "Instagram", href: "https://www.instagram.com/", icon: FaInstagram },
-  { label: "LinkedIn", href: "https://www.linkedin.com/", icon: FaLinkedinIn },
-  { label: "GitHub", href: "https://github.com/", icon: FaGithub },
-];
+const productLinks = ["Features", "Pricing", "Success Stories"];
+const companyLinks = ["About", "Careers", "Contact"];
+const legalLinks = ["Privacy", "Terms", "Security"];
 
 function Footer() {
   return (
-    <footer className="bg-[#0f243d] text-slate-200">
-      <div className="landing-container py-16">
-        <div className="grid gap-10 border-b border-[#1d3655] pb-10 lg:grid-cols-[1.25fr_0.75fr_0.75fr_1fr]">
+    <footer className="bg-[#0b1733] text-slate-200">
+      <div className="landing-container py-10 sm:py-12">
+        <div className="grid gap-8 border-b border-[#1f2c4d] pb-8 md:grid-cols-2 lg:grid-cols-4 lg:gap-10">
           <div>
-            <p className="landing-display text-2xl font-bold text-white">Smart Career</p>
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-300">
-              Practical, AI-powered career planning for students and fresh graduates ready to
-              move from uncertainty to clear action.
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#5146ff] text-sm text-white">
+                <FaGraduationCap />
+              </span>
+              <p className="landing-display text-base font-bold text-white">Smart Career</p>
+            </div>
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
+              AI-powered career guidance for the next generation of professionals.
             </p>
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">Product</h4>
+            <h4 className="text-sm font-semibold text-white">Product</h4>
             <ul className="mt-4 space-y-3 text-sm">
-              {quickLinks.map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="transition hover:text-white">
-                    {link.label}
+              {productLinks.map((item) => (
+                <li key={item}>
+                  <a href="#" className="text-slate-400 transition hover:text-white">
+                    {item}
                   </a>
                 </li>
               ))}
@@ -46,43 +35,34 @@ function Footer() {
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">Account</h4>
+            <h4 className="text-sm font-semibold text-white">Company</h4>
             <ul className="mt-4 space-y-3 text-sm">
-              {accountLinks.map((link) => (
-                <li key={link.label}>
-                  <Link to={link.to} className="transition hover:text-white">
-                    {link.label}
-                  </Link>
+              {companyLinks.map((item) => (
+                <li key={item}>
+                  <a href="#" className="text-slate-400 transition hover:text-white">
+                    {item}
+                  </a>
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">Connect</h4>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {socialLinks.map((social) => {
-                const Icon = social.icon;
-
-                return (
-                  <a
-                    key={social.label}
-                    href={social.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 rounded-xl border border-[#1d3655] bg-[#132b46] px-3 py-2 text-sm transition hover:border-[#2e79ba] hover:text-white"
-                  >
-                    <Icon className="text-[#77b5f5]" />
-                    <span>{social.label}</span>
+            <h4 className="text-sm font-semibold text-white">Legal</h4>
+            <ul className="mt-4 space-y-3 text-sm">
+              {legalLinks.map((item) => (
+                <li key={item}>
+                  <a href="#" className="text-slate-400 transition hover:text-white">
+                    {item}
                   </a>
-                );
-              })}
-            </div>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
-        <div className="pt-6 text-sm text-slate-400">
-          <p>(c) {new Date().getFullYear()} Smart Career. All rights reserved.</p>
+        <div className="pt-5 text-center text-sm text-slate-500">
+          <p>(c) {new Date().getFullYear()} Smart Career Counselling. All rights reserved.</p>
         </div>
       </div>
     </footer>

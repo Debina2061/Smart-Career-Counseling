@@ -1,13 +1,22 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FaFileAlt, FaMapPin, FaRobot, FaUser, FaSignOutAlt, FaTachometerAlt, FaFilePdf } from 'react-icons/fa';
+import {
+  FaBullseye,
+  FaComments,
+  FaFilePdf,
+  FaGraduationCap,
+  FaSearch,
+  FaSignOutAlt,
+  FaTachometerAlt,
+  FaUser,
+} from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: FaTachometerAlt },
   { path: '/resume-builder', label: 'Resume Builder', icon: FaFilePdf },
-  { path: '/ats-scanner', label: 'ATS Resume Scanner', icon: FaFileAlt },
-  { path: '/career-recommendation', label: 'Career Recommendation', icon: FaMapPin },
-  { path: '/ai-chatbot', label: 'AI Chatbot', icon: FaRobot },
+  { path: '/ats-scanner', label: 'ATS Scanner', icon: FaSearch },
+  { path: '/career-recommendation', label: 'Career Recommendations', icon: FaBullseye },
+  { path: '/ai-chatbot', label: 'AI Chat', icon: FaComments },
   { path: '/profile', label: 'Profile', icon: FaUser },
 ];
 
@@ -15,51 +24,52 @@ function Sidebar() {
   const location = useLocation();
   const { logout } = useAuth();
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => {
+    if (path === '/dashboard') return location.pathname === path;
+    return location.pathname.startsWith(path);
+  };
 
   return (
-    <div className="w-52 bg-white border-r border-gray-200 flex flex-col fixed h-screen">
-      {/* Logo */}
-      <div className="px-6 py-6 border-b border-gray-200">
-        <Link to="/dashboard">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Smart <span className="text-transparent bg-clip-text bg-linear-to-r from-purple-600 to-indigo-600">Career</span>
-          </h1>
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-52 flex-col border-r border-slate-200 bg-[#f8fafc]">
+      <div className="flex h-14 items-center border-b border-slate-200 px-4">
+        <Link to="/dashboard" className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#5146ff] text-xs text-white shadow-sm">
+            <FaGraduationCap />
+          </span>
+          <h1 className="text-lg font-bold tracking-tight text-[#5146ff]">Smart Career</h1>
         </Link>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 isActive(item.path)
-                  ? 'bg-blue-50 text-blue-600 font-medium'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-linear-to-r from-[#4f46e5] to-[#6366f1] text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-white hover:text-slate-900'
               }`}
             >
-              <Icon className="text-lg" />
+              <Icon className="text-sm" />
               <span className="text-sm">{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="px-4 py-6 border-t border-gray-200">
+      <div className="border-t border-slate-200 px-3 py-4">
         <button
           onClick={logout}
-          className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-red-600 hover:bg-red-50 transition font-medium"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-900"
         >
-          <FaSignOutAlt className="text-lg" />
+          <FaSignOutAlt className="text-sm" />
           <span>Logout</span>
         </button>
       </div>
-    </div>
+    </aside>
   );
 }
 

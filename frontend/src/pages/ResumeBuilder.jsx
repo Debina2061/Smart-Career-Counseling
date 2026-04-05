@@ -1,8 +1,560 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { FaFileAlt, FaDownload, FaPrint, FaPlus, FaTimes, FaChevronDown, FaUser, FaBriefcase, FaGraduationCap, FaAward, FaCode, FaEnvelope, FaPhone, FaMapMarkerAlt, FaLinkedin, FaGithub, FaLink, FaSave } from 'react-icons/fa'
-import { useAuth } from '../context/AuthContext'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  FaBell,
+  FaDownload,
+  FaEnvelope,
+  FaEye,
+  FaGithub,
+  FaLinkedin,
+  FaMapMarkerAlt,
+  FaPhone,
+  FaPlus,
+  FaRegFileAlt,
+  FaSave,
+  FaTimes,
+  FaTrashAlt,
+} from 'react-icons/fa'
 import Sidebar from '../components/Sidebar'
-import { resumeAPI } from '../utils/api'
+import StudentProfileDropdown from '../components/StudentProfileDropdown'
+import { useAuth } from '../context/AuthContext'
+
+const templateOptions = [
+  {
+    id: 'modern',
+    title: 'Modern',
+    subtitle: 'ATS-friendly two-column layout',
+    accent: 'bg-indigo-500',
+  },
+  {
+    id: 'classic',
+    title: 'Classic',
+    subtitle: 'Traditional single-column format',
+    accent: 'bg-slate-500',
+  },
+  {
+    id: 'creative',
+    title: 'Creative',
+    subtitle: 'Elegant sidebar format',
+    accent: 'bg-slate-700',
+  },
+]
+
+function TemplateMiniPreview({ templateId }) {
+  if (templateId === 'classic') {
+    return (
+      <div className="rounded-md border border-slate-200 bg-white p-2">
+        <div className="mx-auto h-1.5 w-20 rounded-full bg-slate-500" />
+        <div className="mx-auto mt-2 h-1.5 w-16 rounded-full bg-slate-300" />
+        <div className="mt-3 h-px w-full bg-slate-300" />
+        <div className="mt-2 h-2 w-3/4 rounded bg-slate-200" />
+        <div className="mt-1 h-2 w-2/3 rounded bg-slate-200" />
+      </div>
+    )
+  }
+
+  if (templateId === 'creative') {
+    return (
+      <div className="grid h-20 grid-cols-[35%_65%] overflow-hidden rounded-md border border-slate-200">
+        <div className="bg-linear-to-b from-slate-700 to-slate-900 p-1.5">
+          <div className="h-1.5 w-4/5 rounded bg-white/70" />
+          <div className="mt-1 h-1.5 w-3/4 rounded bg-white/50" />
+          <div className="mt-4 h-1.5 w-full rounded bg-white/30" />
+          <div className="mt-1 h-1.5 w-4/5 rounded bg-white/30" />
+        </div>
+        <div className="bg-white p-1.5">
+          <div className="h-1.5 w-3/4 rounded bg-slate-300" />
+          <div className="mt-2 h-7 rounded bg-slate-100" />
+          <div className="mt-1 h-1.5 w-2/3 rounded bg-slate-200" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-2">
+      <div className="flex items-center justify-between">
+        <div className="h-1.5 w-16 rounded-full bg-indigo-500" />
+        <div className="h-1.5 w-10 rounded-full bg-indigo-200" />
+      </div>
+      <div className="mt-2 grid grid-cols-[66%_34%] gap-1.5">
+        <div className="h-10 rounded bg-slate-100" />
+        <div className="h-10 rounded bg-indigo-50" />
+      </div>
+      <div className="mt-1.5 h-1.5 w-3/4 rounded bg-slate-200" />
+    </div>
+  )
+}
+
+const formatMonth = (value) => {
+  if (!value) return ''
+  const date = new Date(`${value}-01`)
+  if (Number.isNaN(date.getTime())) return value
+
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+const hasExperienceContent = (item) =>
+  Boolean(
+    item?.jobTitle?.trim() ||
+      item?.company?.trim() ||
+      item?.achievements?.some((entry) => entry?.trim())
+  )
+
+const hasEducationContent = (item) => Boolean(item?.degree?.trim() || item?.institution?.trim())
+
+function ResumeTemplatePreview({ data, template = 'modern', compact = false }) {
+  const experienceItems = (data.experience || []).filter(hasExperienceContent)
+  const educationItems = (data.education || []).filter(hasEducationContent)
+  const skills = (data.skills || []).filter((item) => item?.trim())
+  const summary = data.professionalSummary?.trim()
+  const contact = [data.email, data.phone, data.location].filter(Boolean)
+  const certificates = (data.certificatesText || '')
+    .split('\n')
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+  const hasReference = Boolean(
+    data.referenceName?.trim() ||
+      data.referenceRole?.trim() ||
+      data.referenceOrganization?.trim() ||
+      data.referenceContact?.trim()
+  )
+  const displayName = data.fullName?.trim() || 'Your Name'
+  const displayRole = data.jobTitle?.trim() || 'Professional Title'
+  const hasAnyContent =
+    Boolean(data.fullName?.trim()) ||
+    Boolean(data.jobTitle?.trim()) ||
+    Boolean(summary) ||
+    experienceItems.length > 0 ||
+    educationItems.length > 0 ||
+    skills.length > 0 ||
+    certificates.length > 0 ||
+    hasReference
+
+  const shellPadding = compact ? 'p-3' : 'p-5'
+  const contentPadding = compact ? 'p-3' : 'p-4'
+  const textClass = compact ? 'text-[11px]' : 'text-sm'
+
+  if (template === 'classic') {
+    const splitIndex = Math.ceil(skills.length / 2)
+    const technicalSkills = skills.slice(0, splitIndex)
+    const softSkills = skills.slice(splitIndex)
+    const classicContact = [
+      data.email ? { key: 'email', icon: FaEnvelope, value: data.email } : null,
+      data.phone ? { key: 'phone', icon: FaPhone, value: data.phone } : null,
+      data.location ? { key: 'location', icon: FaMapMarkerAlt, value: data.location } : null,
+    ].filter(Boolean)
+    const classicLinks = [
+      data.linkedin ? { key: 'linkedin', icon: FaLinkedin, value: data.linkedin } : null,
+      data.github ? { key: 'github', icon: FaGithub, value: data.github } : null,
+    ].filter(Boolean)
+
+    return (
+      <article className={`rounded-lg border border-slate-300 bg-white font-serif ${textClass}`}>
+        <header className="px-5 pb-2 pt-5">
+          <h2 className="text-4xl font-bold leading-none text-slate-900">{displayName}</h2>
+          {displayRole && <p className="mt-1 text-base text-slate-700">{displayRole}</p>}
+
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-800">
+            {classicContact.map((item) => {
+              const Icon = item.icon
+              return (
+                <span key={item.key} className="inline-flex items-center gap-1.5">
+                  <Icon className="text-xs" />
+                  <span>{item.value}</span>
+                </span>
+              )
+            })}
+          </div>
+
+          {classicLinks.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-800">
+              {classicLinks.map((item) => {
+                const Icon = item.icon
+                return (
+                  <span key={item.key} className="inline-flex items-center gap-1.5">
+                    <Icon className="text-xs" />
+                    <span>{item.value}</span>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+        </header>
+
+        <div className={`${shellPadding} space-y-4`}>
+          <section>
+            <h3 className="border-b-2 border-slate-900 pb-0.5 text-xl font-bold uppercase tracking-wide text-slate-900">
+              Summary
+            </h3>
+            <p className="mt-1.5 leading-relaxed text-slate-800">
+              {summary || 'Add your summary in the editor to show this section.'}
+            </p>
+          </section>
+
+          {(educationItems.length > 0 || !hasAnyContent) && (
+            <section>
+              <h3 className="border-b-2 border-slate-900 pb-0.5 text-xl font-bold uppercase tracking-wide text-slate-900">
+                Education
+              </h3>
+              <div className="mt-1.5 space-y-2">
+                {educationItems.length > 0 ? (
+                  educationItems.map((item) => (
+                    <article key={item.id} className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-slate-900">{item.degree || 'Degree'}</p>
+                        <p className="italic text-slate-700">{item.institution || 'Institution'}</p>
+                      </div>
+                      <p className="whitespace-nowrap text-right text-sm text-slate-700">
+                        {[item.startYear, item.endYear].filter(Boolean).join(' - ')}
+                      </p>
+                    </article>
+                  ))
+                ) : (
+                  <p className="text-slate-500">Add your education to show this section.</p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {(experienceItems.length > 0 || !hasAnyContent) && (
+            <section>
+              <h3 className="border-b-2 border-slate-900 pb-0.5 text-xl font-bold uppercase tracking-wide text-slate-900">
+                Projects
+              </h3>
+              <div className="mt-1.5 space-y-3">
+                {experienceItems.length > 0 ? (
+                  experienceItems.map((item) => (
+                    <article key={item.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="font-bold text-slate-900">{item.jobTitle || 'Project Title'}</p>
+                        <p className="whitespace-nowrap text-sm text-slate-700">
+                          {item.startDate || item.endDate
+                            ? `${formatMonth(item.startDate)} - ${item.endDate ? formatMonth(item.endDate) : 'Present'}`
+                            : ''}
+                        </p>
+                      </div>
+                      <p className="italic text-slate-700">{item.company || 'Tech Stack / Context'}</p>
+
+                      {item.achievements?.some((entry) => entry?.trim()) && (
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-slate-800">
+                          {item.achievements
+                            .filter((entry) => entry?.trim())
+                            .map((entry, index) => (
+                              <li key={`${item.id}-${index}`}>{entry}</li>
+                            ))}
+                        </ul>
+                      )}
+                    </article>
+                  ))
+                ) : (
+                  <p className="text-slate-500">Add projects in the experience section to display them here.</p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {(skills.length > 0 || !hasAnyContent) && (
+            <section>
+              <h3 className="border-b-2 border-slate-900 pb-0.5 text-xl font-bold uppercase tracking-wide text-slate-900">
+                Skills
+              </h3>
+              <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="font-bold text-slate-900">Technical Skills</p>
+                  {technicalSkills.length > 0 ? (
+                    <ul className="mt-1 list-disc pl-4 text-slate-800">
+                      {technicalSkills.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-slate-500">No skills added yet.</p>
+                  )}
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900">Soft Skills</p>
+                  {softSkills.length > 0 ? (
+                    <ul className="mt-1 list-disc pl-4 text-slate-800">
+                      {softSkills.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-slate-500">Add more skills to fill this column.</p>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {(certificates.length > 0 || !hasAnyContent) && (
+            <section>
+              <h3 className="border-b-2 border-slate-900 pb-0.5 text-xl font-bold uppercase tracking-wide text-slate-900">
+                Certificates
+              </h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {certificates.length > 0 ? (
+                  certificates.map((item, index) => (
+                    <span
+                      key={`${item}-${index}`}
+                      className="rounded border border-slate-700 px-2 py-1 text-sm text-slate-800"
+                    >
+                      {item}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-slate-500">Add certificates to show them here.</p>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <h3 className="border-b-2 border-slate-900 pb-0.5 text-xl font-bold uppercase tracking-wide text-slate-900">
+              References
+            </h3>
+            {hasReference ? (
+              <p className="mt-1.5 leading-relaxed text-slate-800">
+                <span className="font-bold text-slate-900">{data.referenceName}</span>
+                {data.referenceRole ? `, ${data.referenceRole}` : ''}
+                {data.referenceOrganization ? `, ${data.referenceOrganization}` : ''}
+                {data.referenceContact ? `, ${data.referenceContact}` : ''}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-slate-500">References available upon request.</p>
+            )}
+          </section>
+
+          {!hasAnyContent && (
+            <section className={`rounded-md border border-dashed border-slate-300 bg-slate-50 ${contentPadding}`}>
+              <p className="text-slate-500">Start filling in your details to generate a live resume preview.</p>
+            </section>
+          )}
+        </div>
+      </article>
+    )
+  }
+
+  if (template === 'creative') {
+    const creativeLayout = compact ? 'grid-cols-1' : 'grid-cols-[34%_66%]'
+
+    return (
+      <article className={`overflow-hidden rounded-lg border border-slate-300 bg-white ${textClass}`}>
+        <div className={`grid ${creativeLayout}`}>
+          <aside className="bg-linear-to-b from-slate-800 to-slate-900 px-4 py-5 text-white">
+            <h2 className="text-xl font-bold leading-tight">{displayName}</h2>
+            <p className="mt-1 text-white/90">{displayRole}</p>
+
+            <div className="mt-4 space-y-1 text-xs text-white/90">
+              {(contact.length ? contact : ['email@example.com', '+1 (555) 123-4567', 'City, Country']).map((item) => (
+                <p key={item}>{item}</p>
+              ))}
+            </div>
+
+            {skills.length > 0 && (
+              <section className="mt-5">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/80">Core Skills</h3>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {skills.map((skill, index) => (
+                    <span
+                      key={`${skill}-${index}`}
+                      className="rounded-full border border-white/40 bg-white/20 px-2 py-0.5 text-[10px]"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {summary && (
+              <section className="mt-5">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/80">Summary</h3>
+                <p className="mt-2 leading-relaxed text-white/90">{summary}</p>
+              </section>
+            )}
+          </aside>
+
+          <div className="space-y-4 px-4 py-5">
+            {experienceItems.length > 0 && (
+              <section>
+                <h3 className="border-b border-slate-200 pb-1 text-[11px] font-bold uppercase tracking-widest text-slate-700">
+                  Experience Highlights
+                </h3>
+                <div className="mt-2 space-y-3">
+                  {experienceItems.map((item) => (
+                    <article key={item.id} className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{item.jobTitle || 'Job Title'}</p>
+                          <p className="text-slate-600">{item.company || 'Company Name'}</p>
+                        </div>
+                        <p className="whitespace-nowrap text-xs text-slate-500">
+                          {item.startDate || item.endDate
+                            ? `${formatMonth(item.startDate)} - ${item.endDate ? formatMonth(item.endDate) : 'Present'}`
+                            : ''}
+                        </p>
+                      </div>
+
+                      {item.achievements?.some((entry) => entry?.trim()) && (
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-slate-700">
+                          {item.achievements
+                            .filter((entry) => entry?.trim())
+                            .map((entry, index) => (
+                              <li key={`${item.id}-${index}`}>{entry}</li>
+                            ))}
+                        </ul>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {educationItems.length > 0 && (
+              <section>
+                <h3 className="border-b border-slate-200 pb-1 text-[11px] font-bold uppercase tracking-widest text-slate-700">
+                  Education
+                </h3>
+                <div className="mt-2 space-y-2">
+                  {educationItems.map((item) => (
+                    <article key={item.id} className="rounded-md border border-slate-200 p-2.5">
+                      <p className="font-semibold text-slate-900">{item.degree || 'Degree'}</p>
+                      <div className="mt-0.5 flex items-center justify-between gap-3 text-slate-600">
+                        <p>{item.institution || 'Institution'}</p>
+                        <p className="text-xs text-slate-500">
+                          {[item.startYear, item.endYear].filter(Boolean).join(' - ')}
+                        </p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {!hasAnyContent && (
+              <section className={`rounded-md border border-dashed border-slate-300 bg-slate-50 ${contentPadding}`}>
+                <p className="text-slate-500">Start filling in your details to generate a live resume preview.</p>
+              </section>
+            )}
+          </div>
+        </div>
+      </article>
+    )
+  }
+
+  return (
+    <article className={`rounded-lg border border-slate-200 bg-white ${textClass}`}>
+      <header className="grid gap-3 border-b border-indigo-100 bg-indigo-50/40 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+        <div>
+          <h2 className="text-2xl font-bold leading-tight text-slate-900">{displayName}</h2>
+          <p className="mt-1 font-semibold text-indigo-600">{displayRole}</p>
+        </div>
+        <div className="text-xs text-slate-600 sm:text-right">
+          {(contact.length ? contact : ['email@example.com', '+1 (555) 123-4567', 'City, Country']).map((item) => (
+            <p key={item}>{item}</p>
+          ))}
+        </div>
+      </header>
+
+      <div className={`${shellPadding} grid gap-4 ${compact ? 'grid-cols-1' : 'md:grid-cols-[1.7fr_1fr]'}`}>
+        <div className="space-y-4">
+        {summary && (
+          <section>
+            <h3 className="border-b border-slate-200 pb-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              Professional Summary
+            </h3>
+            <p className="mt-2 leading-relaxed text-slate-700">{summary}</p>
+          </section>
+        )}
+
+        {experienceItems.length > 0 && (
+          <section>
+            <h3 className="border-b border-slate-200 pb-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              Work Experience
+            </h3>
+            <div className="mt-2 space-y-3">
+              {experienceItems.map((item) => (
+                <article key={item.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{item.jobTitle || 'Job Title'}</p>
+                      <p className="text-slate-600">{item.company || 'Company Name'}</p>
+                    </div>
+                    <p className="whitespace-nowrap text-xs text-slate-500">
+                      {item.startDate || item.endDate
+                        ? `${formatMonth(item.startDate)} - ${item.endDate ? formatMonth(item.endDate) : 'Present'}`
+                        : ''}
+                    </p>
+                  </div>
+
+                  {item.achievements?.some((entry) => entry?.trim()) && (
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-slate-700">
+                      {item.achievements
+                        .filter((entry) => entry?.trim())
+                        .map((entry, index) => (
+                          <li key={`${item.id}-${index}`}>{entry}</li>
+                        ))}
+                    </ul>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {educationItems.length > 0 && (
+          <section>
+            <h3 className="border-b border-slate-200 pb-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              Education
+            </h3>
+            <div className="mt-2 space-y-2">
+              {educationItems.map((item) => (
+                <article key={item.id} className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">{item.degree || 'Degree'}</p>
+                    <p className="text-slate-600">{item.institution || 'Institution'}</p>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {[item.startYear, item.endYear].filter(Boolean).join(' - ')}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+        </div>
+
+        <div className="space-y-3">
+        {skills.length > 0 && (
+          <section>
+            <h3 className="border-b border-slate-200 pb-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              Skills
+            </h3>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {skills.map((skill, index) => (
+                <span key={`${skill}-${index}`} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+        </div>
+
+        {!hasAnyContent && (
+          <section className={`rounded-md border border-dashed border-slate-300 bg-slate-50 ${contentPadding}`}>
+            <p className="text-slate-500">Start filling in your details to generate a live resume preview.</p>
+          </section>
+        )}
+      </div>
+    </article>
+  )
+}
 
 function ResumeBuilder() {
   const { user } = useAuth()
@@ -10,1260 +562,731 @@ function ResumeBuilder() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
   const [selectedTemplate, setSelectedTemplate] = useState('modern')
-  const printRef = useRef()
+  const [skillInput, setSkillInput] = useState('')
+  const printRef = useRef(null)
+
+  const [userProfile, setUserProfile] = useState({
+    name: 'Student Demo',
+    email: 'student@demo.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Student',
+  })
 
   const [resumeData, setResumeData] = useState({
-    // Personal Information
     fullName: '',
+    jobTitle: '',
     email: '',
     phone: '',
     location: '',
     linkedin: '',
     github: '',
-    portfolio: '',
     professionalSummary: '',
-    
-    // Work Experience
     experience: [
       {
         id: 1,
         jobTitle: '',
         company: '',
-        location: '',
         startDate: '',
         endDate: '',
-        current: false,
-        description: '',
-        achievements: ['']
-      }
+        achievements: ['', '', ''],
+      },
     ],
-    
-    // Education
     education: [
       {
         id: 1,
         degree: '',
         institution: '',
-        location: '',
-        graduationDate: '',
-        gpa: '',
-        honors: ''
-      }
+        startYear: '',
+        endYear: '',
+      },
     ],
-    
-    // Skills
-    skills: {
-      technical: [],
-      soft: [],
-      languages: [],
-      tools: []
-    },
-    
-    // Projects
-    projects: [
-      {
-        id: 1,
-        name: '',
-        description: '',
-        technologies: '',
-        link: '',
-        highlights: ['']
-      }
-    ],
-    
-    // Certifications
-    certifications: [
-      {
-        id: 1,
-        name: '',
-        issuer: '',
-        date: '',
-        credentialId: ''
-      }
-    ],
-    
-    // Additional Sections
-    achievements: [],
-    languages: [],
-    hobbies: []
-  })
-
-  const [userProfile, setUserProfile] = useState({
-    name: 'User',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=User'
+    skills: [],
+    certificatesText: '',
+    referenceName: '',
+    referenceRole: '',
+    referenceOrganization: '',
+    referenceContact: '',
   })
 
   useEffect(() => {
-    if (user) {
-      setUserProfile({
-        name: user.fullName || user.name || user.email?.split('@')[0] || 'User',
-        avatar: user.avatarUrl || user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email || 'User'}`
-      });
-      
-      setResumeData((prev) => ({
-        ...prev,
-        fullName: user.fullName || '',
-        email: user.email || ''
-      }));
-      
-      loadSavedResume();
-    }
-  }, [user]);
+    if (!user) return
 
-  const loadSavedResume = async () => {
+    setUserProfile({
+      name: user.fullName || user.name || user.email?.split('@')[0] || 'Student Demo',
+      email: user.email || 'student@demo.com',
+      avatar:
+        user.avatarUrl ||
+        user.avatar ||
+        `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email || 'Student'}`,
+    })
+
+    setResumeData((prev) => ({
+      ...prev,
+      fullName: user.fullName || user.name || prev.fullName,
+      email: user.email || prev.email,
+    }))
+
+    const savedData = localStorage.getItem('resumeBuilderData')
+    if (!savedData) return
+
     try {
-      const savedData = localStorage.getItem('resumeBuilderData');
-      if (savedData) {
-        setResumeData(JSON.parse(savedData));
+      const parsed = JSON.parse(savedData)
+
+      // Supports both old and new local storage formats.
+      if (parsed?.resumeData) {
+        setResumeData((prev) => ({
+          ...prev,
+          ...parsed.resumeData,
+        }))
+        if (parsed.selectedTemplate) setSelectedTemplate(parsed.selectedTemplate)
+      } else {
+        setResumeData((prev) => ({
+          ...prev,
+          ...parsed,
+        }))
       }
-    } catch (error) {
-      console.log('No saved resume data');
+    } catch {
+      // Ignore invalid local storage value.
     }
-  };
+  }, [user])
 
-  const handleSaveResume = () => {
-    setSaving(true);
-    try {
-      localStorage.setItem('resumeBuilderData', JSON.stringify(resumeData));
-      setMessage({ type: 'success', text: 'Resume saved successfully!' });
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to save resume' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleInputChange = (field, value) => {
-    setResumeData(prev => ({ ...prev, [field]: value }))
+  const updateResumeField = (field, value) => {
+    setResumeData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
   }
 
-  // Experience handlers
   const addExperience = () => {
-    setResumeData(prev => ({
+    setResumeData((prev) => ({
       ...prev,
-      experience: [...prev.experience, {
-        id: Date.now(),
-        jobTitle: '',
-        company: '',
-        location: '',
-        startDate: '',
-        endDate: '',
-        current: false,
-        description: '',
-        achievements: ['']
-      }]
+      experience: [
+        ...prev.experience,
+        {
+          id: Date.now(),
+          jobTitle: '',
+          company: '',
+          startDate: '',
+          endDate: '',
+          achievements: ['', '', ''],
+        },
+      ],
     }))
   }
 
   const updateExperience = (id, field, value) => {
-    setResumeData(prev => ({
+    setResumeData((prev) => ({
       ...prev,
-      experience: prev.experience.map(exp => 
-        exp.id === id ? { ...exp, [field]: value } : exp
-      )
+      experience: prev.experience.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
+    }))
+  }
+
+  const updateAchievement = (id, index, value) => {
+    setResumeData((prev) => ({
+      ...prev,
+      experience: prev.experience.map((item) => {
+        if (item.id !== id) return item
+
+        const nextAchievements = [...item.achievements]
+        nextAchievements[index] = value
+        return {
+          ...item,
+          achievements: nextAchievements,
+        }
+      }),
     }))
   }
 
   const removeExperience = (id) => {
-    setResumeData(prev => ({
+    setResumeData((prev) => ({
       ...prev,
-      experience: prev.experience.filter(exp => exp.id !== id)
+      experience:
+        prev.experience.length > 1
+          ? prev.experience.filter((item) => item.id !== id)
+          : prev.experience,
     }))
   }
 
-  const addAchievement = (expId) => {
-    setResumeData(prev => ({
-      ...prev,
-      experience: prev.experience.map(exp => 
-        exp.id === expId ? { ...exp, achievements: [...exp.achievements, ''] } : exp
-      )
-    }))
-  }
-
-  const updateAchievement = (expId, index, value) => {
-    setResumeData(prev => ({
-      ...prev,
-      experience: prev.experience.map(exp => 
-        exp.id === expId ? {
-          ...exp,
-          achievements: exp.achievements.map((ach, i) => i === index ? value : ach)
-        } : exp
-      )
-    }))
-  }
-
-  const removeAchievement = (expId, index) => {
-    setResumeData(prev => ({
-      ...prev,
-      experience: prev.experience.map(exp => 
-        exp.id === expId ? {
-          ...exp,
-          achievements: exp.achievements.filter((_, i) => i !== index)
-        } : exp
-      )
-    }))
-  }
-
-  // Education handlers
   const addEducation = () => {
-    setResumeData(prev => ({
+    setResumeData((prev) => ({
       ...prev,
-      education: [...prev.education, {
-        id: Date.now(),
-        degree: '',
-        institution: '',
-        location: '',
-        graduationDate: '',
-        gpa: '',
-        honors: ''
-      }]
+      education: [
+        ...prev.education,
+        {
+          id: Date.now(),
+          degree: '',
+          institution: '',
+          startYear: '',
+          endYear: '',
+        },
+      ],
     }))
   }
 
   const updateEducation = (id, field, value) => {
-    setResumeData(prev => ({
+    setResumeData((prev) => ({
       ...prev,
-      education: prev.education.map(edu => 
-        edu.id === id ? { ...edu, [field]: value } : edu
-      )
+      education: prev.education.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
     }))
   }
 
   const removeEducation = (id) => {
-    setResumeData(prev => ({
+    setResumeData((prev) => ({
       ...prev,
-      education: prev.education.filter(edu => edu.id !== id)
+      education:
+        prev.education.length > 1
+          ? prev.education.filter((item) => item.id !== id)
+          : prev.education,
     }))
   }
 
-  // Skills handlers
-  const addSkill = (category, skill) => {
-    if (skill.trim()) {
-      setResumeData(prev => ({
+  const addSkill = () => {
+    const normalized = skillInput.trim()
+    if (!normalized) return
+
+    setResumeData((prev) => {
+      if (prev.skills.some((item) => item.toLowerCase() === normalized.toLowerCase())) {
+        return prev
+      }
+
+      return {
         ...prev,
-        skills: {
-          ...prev.skills,
-          [category]: [...prev.skills[category], skill.trim()]
-        }
-      }))
+        skills: [...prev.skills, normalized],
+      }
+    })
+
+    setSkillInput('')
+  }
+
+  const removeSkill = (index) => {
+    setResumeData((prev) => ({
+      ...prev,
+      skills: prev.skills.filter((_, i) => i !== index),
+    }))
+  }
+
+  const handleSaveResume = () => {
+    setSaving(true)
+
+    try {
+      localStorage.setItem(
+        'resumeBuilderData',
+        JSON.stringify({ resumeData, selectedTemplate })
+      )
+      setMessage({ type: 'success', text: 'Resume draft saved successfully.' })
+      setTimeout(() => setMessage({ type: '', text: '' }), 2500)
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to save your resume draft.' })
+    } finally {
+      setSaving(false)
     }
   }
 
-  const removeSkill = (category, index) => {
-    setResumeData(prev => ({
-      ...prev,
-      skills: {
-        ...prev.skills,
-        [category]: prev.skills[category].filter((_, i) => i !== index)
-      }
-    }))
-  }
-
-  // Project handlers
-  const addProject = () => {
-    setResumeData(prev => ({
-      ...prev,
-      projects: [...prev.projects, {
-        id: Date.now(),
-        name: '',
-        description: '',
-        technologies: '',
-        link: '',
-        highlights: ['']
-      }]
-    }))
-  }
-
-  const updateProject = (id, field, value) => {
-    setResumeData(prev => ({
-      ...prev,
-      projects: prev.projects.map(proj => 
-        proj.id === id ? { ...proj, [field]: value } : proj
-      )
-    }))
-  }
-
-  const removeProject = (id) => {
-    setResumeData(prev => ({
-      ...prev,
-      projects: prev.projects.filter(proj => proj.id !== id)
-    }))
-  }
-
-  const addProjectHighlight = (projId) => {
-    setResumeData(prev => ({
-      ...prev,
-      projects: prev.projects.map(proj => 
-        proj.id === projId ? { ...proj, highlights: [...proj.highlights, ''] } : proj
-      )
-    }))
-  }
-
-  const updateProjectHighlight = (projId, index, value) => {
-    setResumeData(prev => ({
-      ...prev,
-      projects: prev.projects.map(proj => 
-        proj.id === projId ? {
-          ...proj,
-          highlights: proj.highlights.map((h, i) => i === index ? value : h)
-        } : proj
-      )
-    }))
-  }
-
-  const removeProjectHighlight = (projId, index) => {
-    setResumeData(prev => ({
-      ...prev,
-      projects: prev.projects.map(proj => 
-        proj.id === projId ? {
-          ...proj,
-          highlights: proj.highlights.filter((_, i) => i !== index)
-        } : proj
-      )
-    }))
-  }
-
-  // Certification handlers
-  const addCertification = () => {
-    setResumeData(prev => ({
-      ...prev,
-      certifications: [...prev.certifications, {
-        id: Date.now(),
-        name: '',
-        issuer: '',
-        date: '',
-        credentialId: ''
-      }]
-    }))
-  }
-
-  const updateCertification = (id, field, value) => {
-    setResumeData(prev => ({
-      ...prev,
-      certifications: prev.certifications.map(cert => 
-        cert.id === id ? { ...cert, [field]: value } : cert
-      )
-    }))
-  }
-
-  const removeCertification = (id) => {
-    setResumeData(prev => ({
-      ...prev,
-      certifications: prev.certifications.filter(cert => cert.id !== id)
-    }))
-  }
-
   const handleDownloadPDF = () => {
+    if (!printRef.current) return
+
     setLoading(true)
     setMessage({ type: '', text: '' })
 
     try {
-      const printContent = printRef.current
-      const originalBodyContent = document.body.innerHTML
-
-      // Create print-specific styling
+      const printWindow = window.open('', '', 'width=900,height=700')
       const printStyles = `
         <style>
-          @media print {
-            body { margin: 0; padding: 0; }
-            * { box-sizing: border-box; }
-            .no-print { display: none !important; }
-            .page-break { page-break-after: always; }
-            h1, h2, h3 { page-break-after: avoid; }
+          @page {
+            margin: 0.7in;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            color: #0f172a;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          * {
+            box-sizing: border-box;
           }
         </style>
       `
 
-      const printWindow = window.open('', '', 'width=800,height=600')
       printWindow.document.write(`
-        <!DOCTYPE html>
+        <!doctype html>
         <html>
           <head>
-            <title>${resumeData.fullName || 'Resume'} - CV</title>
+            <title>${resumeData.fullName || 'Resume'} - PDF</title>
             <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
             ${printStyles}
           </head>
           <body>
-            ${printContent.innerHTML}
+            ${printRef.current.innerHTML}
           </body>
         </html>
       `)
-      
+
       printWindow.document.close()
-      
+
       setTimeout(() => {
         printWindow.print()
         printWindow.close()
         setLoading(false)
-        setMessage({ type: 'success', text: 'Resume ready to download! Please use your browser\'s print dialog to save as PDF.' })
-      }, 500)
-
-    } catch (error) {
-      console.error('PDF generation error:', error)
-      setMessage({ type: 'error', text: 'Failed to generate PDF. Please try again.' })
+        setMessage({
+          type: 'success',
+          text: 'Resume is ready. Use the print dialog to save as PDF.',
+        })
+      }, 450)
+    } catch {
       setLoading(false)
+      setMessage({
+        type: 'error',
+        text: 'Unable to generate PDF preview. Please try again.',
+      })
     }
   }
 
-  const handlePrint = () => {
-    window.print()
-  }
+  const hasAnyPreviewContent = useMemo(() => {
+    return Boolean(
+      resumeData.fullName?.trim() ||
+        resumeData.jobTitle?.trim() ||
+        resumeData.professionalSummary?.trim() ||
+        resumeData.experience.some(hasExperienceContent) ||
+        resumeData.education.some(hasEducationContent) ||
+        resumeData.skills.length > 0
+    )
+  }, [resumeData])
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-[#f3f4f8]">
       <Sidebar />
 
-      <div className="flex-1 ml-52 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-8 py-5 flex items-center justify-between sticky top-0 z-10 no-print">
+      <div className="ml-52 flex min-h-screen flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-end border-b border-slate-200 bg-white px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white">
-              <FaFileAlt className="text-lg" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900">Resume Builder</h2>
-          </div>
-
-          <div className="flex items-center gap-4">
             <button
-              onClick={handleSaveResume}
-              disabled={saving}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 disabled:opacity-50"
+              className="relative rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Notifications"
             >
-              <FaSave />
-              {saving ? 'Saving...' : 'Save'}
-            </button>
-            
-            <button
-              onClick={handleDownloadPDF}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 disabled:opacity-50"
-            >
-              <FaDownload />
-              {loading ? 'Generating...' : 'Download PDF'}
-            </button>
-            
-            <button
-              onClick={handlePrint}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2"
-            >
-              <FaPrint />
-              Print
+              <FaBell className="text-lg" />
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                3
+              </span>
             </button>
 
-            <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
-              <img src={userProfile.avatar} alt={userProfile.name} className="w-9 h-9 rounded-full" />
-              <span className="text-sm font-medium text-gray-900">{userProfile.name}</span>
-              <FaChevronDown className="text-gray-400 text-xs" />
-            </div>
+            <StudentProfileDropdown
+              name={userProfile.name}
+              email={userProfile.email}
+              avatar={userProfile.avatar}
+              className="border-l border-slate-200 pl-3"
+            />
           </div>
         </header>
 
-        {/* Message */}
-        {message.text && (
-          <div className={`mx-8 mt-4 px-4 py-3 rounded-lg no-print ${
-            message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-          }`}>
-            {message.text}
-          </div>
-        )}
+        <main className="flex-1 overflow-y-auto bg-[#f5f7fb] p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-375">
+            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h1 className="text-4xl font-bold leading-none text-slate-900">Resume Builder</h1>
+                <p className="mt-2 text-slate-600">Create a professional ATS-friendly resume</p>
+              </div>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Input Section */}
-            <div className="space-y-6 no-print">
-              {/* Personal Information */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <FaUser className="text-blue-600" />
-                  <h3 className="text-lg font-bold text-gray-900">Personal Information</h3>
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveResume}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <FaSave className="text-xs" />
+                  {saving ? 'Saving...' : 'Save Draft'}
+                </button>
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#5146ff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <FaDownload className="text-xs" />
+                  {loading ? 'Generating...' : 'Download PDF'}
+                </button>
+              </div>
+            </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
-                    <input
-                      type="text"
-                      value={resumeData.fullName}
-                      onChange={(e) => handleInputChange('fullName', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                      placeholder="John Doe"
-                    />
+            {message.text && (
+              <div
+                className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+                  message.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-rose-200 bg-rose-50 text-rose-700'
+                }`}
+              >
+                {message.text}
+              </div>
+            )}
+
+            <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+              <div className="space-y-4">
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <h2 className="text-sm font-semibold text-slate-900">Choose Template</h2>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {templateOptions.map((template) => {
+                      const selected = selectedTemplate === template.id
+
+                      return (
+                        <button
+                          key={template.id}
+                          onClick={() => setSelectedTemplate(template.id)}
+                          className={`rounded-lg border p-3 text-left transition ${
+                            selected
+                              ? 'border-[#5146ff] bg-[#f4f3ff] shadow-[0_0_0_1px_#5146ff]'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <TemplateMiniPreview templateId={template.id} />
+                          <p className="font-semibold text-slate-900">{template.title}</p>
+                          <p className="text-xs text-slate-500">{template.subtitle}</p>
+                        </button>
+                      )
+                    })}
                   </div>
+                </section>
 
-                  <div className="grid grid-cols-2 gap-4">
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <h2 className="text-2xl font-bold text-slate-900">Personal Information</h2>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Full Name</label>
+                      <input
+                        value={resumeData.fullName}
+                        onChange={(e) => updateResumeField('fullName', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Job Title</label>
+                      <input
+                        value={resumeData.jobTitle}
+                        onChange={(e) => updateResumeField('jobTitle', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="Full Stack Developer"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Email</label>
                       <input
                         type="email"
                         value={resumeData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                        placeholder="debina@example.com"
+                        onChange={(e) => updateResumeField('email', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="john@example.com"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Phone</label>
                       <input
-                        type="tel"
                         value={resumeData.phone}
-                        onChange={(e) => handleInputChange('phone', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                        placeholder="+977 9812345678"
+                        onChange={(e) => updateResumeField('phone', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="+1 (555) 123-4567"
                       />
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                    <input
-                      type="text"
-                      value={resumeData.location}
-                      onChange={(e) => handleInputChange('location', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                      placeholder="Pharping ktm, Nepal"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn</label>
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Location</label>
                       <input
-                        type="text"
+                        value={resumeData.location}
+                        onChange={(e) => updateResumeField('location', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="San Francisco, CA"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">LinkedIn</label>
+                      <input
                         value={resumeData.linkedin}
-                        onChange={(e) => handleInputChange('linkedin', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                        placeholder="username"
+                        onChange={(e) => updateResumeField('linkedin', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="linkedin.com/in/yourname"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">GitHub</label>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">GitHub</label>
                       <input
-                        type="text"
                         value={resumeData.github}
-                        onChange={(e) => handleInputChange('github', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                        placeholder="username"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Portfolio</label>
-                      <input
-                        type="text"
-                        value={resumeData.portfolio}
-                        onChange={(e) => handleInputChange('portfolio', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                        placeholder="yourwebsite.com"
+                        onChange={(e) => updateResumeField('github', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="github.com/yourname"
                       />
                     </div>
                   </div>
+                </section>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Professional Summary</label>
-                    <textarea
-                      value={resumeData.professionalSummary}
-                      onChange={(e) => handleInputChange('professionalSummary', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-black"
-                      rows="4"
-                      placeholder="Write a brief summary about your professional background and goals..."
-                    />
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <h2 className="text-2xl font-bold text-slate-900">Professional Summary</h2>
+                  <textarea
+                    value={resumeData.professionalSummary}
+                    onChange={(e) => updateResumeField('professionalSummary', e.target.value)}
+                    className="mt-4 min-h-24 w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                    placeholder="Write a brief professional summary..."
+                  />
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-slate-900">Work Experience</h2>
+                    <button
+                      onClick={addExperience}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <FaPlus className="text-xs" />
+                      Add
+                    </button>
                   </div>
-                </div>
-              </div>
 
-              {/* Work Experience */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <FaBriefcase className="text-blue-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Work Experience</h3>
-                  </div>
-                  <button
-                    onClick={addExperience}
-                    className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium"
-                  >
-                    <FaPlus /> Add
-                  </button>
-                </div>
-
-                <div className="space-y-6">
-                  {resumeData.experience.map((exp, index) => (
-                    <div key={exp.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <span className="text-sm font-medium text-gray-500">Experience {index + 1}</span>
-                        {resumeData.experience.length > 1 && (
-                          <button
-                            onClick={() => removeExperience(exp.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <FaTimes />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
+                  <div className="mt-4 space-y-3">
+                    {resumeData.experience.map((exp) => (
+                      <div key={exp.id} className="rounded-lg border border-slate-200 bg-[#fbfcff] p-3">
+                        <div className="mb-3 flex items-start justify-end">
+                          {resumeData.experience.length > 1 && (
+                            <button
+                              onClick={() => removeExperience(exp.id)}
+                              className="text-rose-500 transition hover:text-rose-600"
+                              aria-label="Delete experience"
+                            >
+                              <FaTrashAlt className="text-xs" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="space-y-2">
                           <input
-                            type="text"
                             value={exp.jobTitle}
                             onChange={(e) => updateExperience(exp.id, 'jobTitle', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                            className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
                             placeholder="Job Title"
                           />
                           <input
-                            type="text"
                             value={exp.company}
                             onChange={(e) => updateExperience(exp.id, 'company', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                            className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
                             placeholder="Company Name"
                           />
-                        </div>
-
-                        <input
-                          type="text"
-                          value={exp.location}
-                          onChange={(e) => updateExperience(exp.id, 'location', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Location"
-                        />
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <input
-                            type="month"
-                            value={exp.startDate}
-                            onChange={(e) => updateExperience(exp.id, 'startDate', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          />
-                          <input
-                            type="month"
-                            value={exp.endDate}
-                            onChange={(e) => updateExperience(exp.id, 'endDate', e.target.value)}
-                            disabled={exp.current}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-black"
-                          />
-                        </div>
-
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={exp.current}
-                            onChange={(e) => updateExperience(exp.id, 'current', e.target.checked)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="text-sm text-gray-700">Currently working here</span>
-                        </label>
-
-                        <textarea
-                          value={exp.description}
-                          onChange={(e) => updateExperience(exp.id, 'description', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-black"
-                          rows="2"
-                          placeholder="Job description..."
-                        />
-
-                        <div>
-                          <div className="flex justify-between items-center mb-2">
-                            <label className="text-sm font-medium text-gray-700">Key Achievements</label>
-                            <button
-                              onClick={() => addAchievement(exp.id)}
-                              className="text-blue-600 hover:text-blue-700 text-xs flex items-center gap-1"
-                            >
-                              <FaPlus /> Add
-                            </button>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <input
+                              type="month"
+                              value={exp.startDate}
+                              onChange={(e) => updateExperience(exp.id, 'startDate', e.target.value)}
+                              className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                            />
+                            <input
+                              type="month"
+                              value={exp.endDate}
+                              onChange={(e) => updateExperience(exp.id, 'endDate', e.target.value)}
+                              className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                            />
                           </div>
-                          <div className="space-y-2">
-                            {exp.achievements.map((achievement, achIndex) => (
-                              <div key={achIndex} className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={achievement}
-                                  onChange={(e) => updateAchievement(exp.id, achIndex, e.target.value)}
-                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                                  placeholder="Achievement or responsibility..."
-                                />
-                                {exp.achievements.length > 1 && (
-                                  <button
-                                    onClick={() => removeAchievement(exp.id, achIndex)}
-                                    className="text-red-600 hover:text-red-700 px-2"
-                                  >
-                                    <FaTimes />
-                                  </button>
-                                )}
-                              </div>
+                          <div className="rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2">
+                            {exp.achievements.map((item, index) => (
+                              <input
+                                key={`${exp.id}-${index}`}
+                                value={item}
+                                onChange={(e) => updateAchievement(exp.id, index, e.target.value)}
+                                className="w-full border-0 bg-transparent py-0.5 text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                                placeholder="• Achievement or responsibility"
+                              />
                             ))}
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Education */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <FaGraduationCap className="text-blue-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Education</h3>
+                    ))}
                   </div>
-                  <button
-                    onClick={addEducation}
-                    className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium"
-                  >
-                    <FaPlus /> Add
-                  </button>
-                </div>
+                </section>
 
-                <div className="space-y-4">
-                  {resumeData.education.map((edu, index) => (
-                    <div key={edu.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <span className="text-sm font-medium text-gray-500">Education {index + 1}</span>
-                        {resumeData.education.length > 1 && (
-                          <button
-                            onClick={() => removeEducation(edu.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <FaTimes />
-                          </button>
-                        )}
-                      </div>
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-slate-900">Education</h2>
+                    <button
+                      onClick={addEducation}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <FaPlus className="text-xs" />
+                      Add
+                    </button>
+                  </div>
 
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          value={edu.degree}
-                          onChange={(e) => updateEducation(edu.id, 'degree', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Degree (e.g., Bachelor of Science in Computer Science)"
-                        />
-                        <input
-                          type="text"
-                          value={edu.institution}
-                          onChange={(e) => updateEducation(edu.id, 'institution', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Institution Name"
-                        />
-                        <div className="grid grid-cols-2 gap-3">
-                          <input
-                            type="text"
-                            value={edu.location}
-                            onChange={(e) => updateEducation(edu.id, 'location', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                            placeholder="Location"
-                          />
-                          <input
-                            type="month"
-                            value={edu.graduationDate}
-                            onChange={(e) => updateEducation(edu.id, 'graduationDate', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <input
-                            type="text"
-                            value={edu.gpa}
-                            onChange={(e) => updateEducation(edu.id, 'gpa', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                            placeholder="GPA (e.g., 3.8/4.0)"
-                          />
-                          <input
-                            type="text"
-                            value={edu.honors}
-                            onChange={(e) => updateEducation(edu.id, 'honors', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                            placeholder="Honors (e.g., Cum Laude)"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Skills */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <FaCode className="text-blue-600" />
-                  <h3 className="text-lg font-bold text-gray-900">Skills</h3>
-                </div>
-
-                <div className="space-y-4">
-                  {Object.entries({
-                    technical: 'Technical Skills',
-                    tools: 'Tools & Technologies',
-                    soft: 'Soft Skills',
-                    languages: 'Languages'
-                  }).map(([category, label]) => (
-                    <div key={category}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {resumeData.skills[category].map((skill, index) => (
-                          <span
-                            key={index}
-                            className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm flex items-center gap-2"
-                          >
-                            {skill}
+                  <div className="mt-4 space-y-3">
+                    {resumeData.education.map((edu) => (
+                      <div key={edu.id} className="rounded-lg border border-slate-200 bg-[#fbfcff] p-3">
+                        <div className="mb-3 flex items-start justify-end">
+                          {resumeData.education.length > 1 && (
                             <button
-                              onClick={() => removeSkill(category, index)}
-                              className="hover:text-blue-900"
+                              onClick={() => removeEducation(edu.id)}
+                              className="text-rose-500 transition hover:text-rose-600"
+                              aria-label="Delete education"
                             >
-                              <FaTimes className="text-xs" />
+                              <FaTrashAlt className="text-xs" />
                             </button>
-                          </span>
-                        ))}
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <input
+                            value={edu.degree}
+                            onChange={(e) => updateEducation(edu.id, 'degree', e.target.value)}
+                            className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                            placeholder="Degree"
+                          />
+                          <input
+                            value={edu.institution}
+                            onChange={(e) => updateEducation(edu.id, 'institution', e.target.value)}
+                            className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                            placeholder="Institution"
+                          />
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <input
+                              value={edu.startYear}
+                              onChange={(e) => updateEducation(edu.id, 'startYear', e.target.value)}
+                              className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                              placeholder="Start Year"
+                            />
+                            <input
+                              value={edu.endYear}
+                              onChange={(e) => updateEducation(edu.id, 'endYear', e.target.value)}
+                              className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                              placeholder="End Year"
+                            />
+                          </div>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <h2 className="text-2xl font-bold text-slate-900">Skills</h2>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {resumeData.skills.map((skill, index) => (
+                      <span
+                        key={`${skill}-${index}`}
+                        className="inline-flex items-center gap-1 rounded-md bg-[#eef1ff] px-2.5 py-1 text-xs font-semibold text-[#4f46e5]"
+                      >
+                        {skill}
+                        <button
+                          onClick={() => removeSkill(index)}
+                          className="text-[10px] text-[#6366f1] transition hover:text-[#4338ca]"
+                          aria-label={`Remove ${skill}`}
+                        >
+                          <FaTimes />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-3">
+                    <input
+                      value={skillInput}
+                      onChange={(e) => setSkillInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addSkill()
+                        }
+                      }}
+                      className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                      placeholder="Add a skill and press Enter"
+                    />
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <h2 className="text-2xl font-bold text-slate-900">Certificates</h2>
+                  <p className="mt-1 text-sm text-slate-500">Add one certificate per line.</p>
+                  <textarea
+                    value={resumeData.certificatesText}
+                    onChange={(e) => updateResumeField('certificatesText', e.target.value)}
+                    className="mt-3 min-h-20 w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                    placeholder="AWS Academy Data Engineering\nAWS Academy Cloud Foundations"
+                  />
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <h2 className="text-2xl font-bold text-slate-900">Reference</h2>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Name</label>
                       <input
-                        type="text"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            addSkill(category, e.target.value)
-                            e.target.value = ''
-                          }
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                        placeholder={`Add ${label.toLowerCase()} (press Enter)`}
+                        value={resumeData.referenceName}
+                        onChange={(e) => updateResumeField('referenceName', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="Mr. Santosh Parajuli"
                       />
                     </div>
-                  ))}
-                </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Role</label>
+                      <input
+                        value={resumeData.referenceRole}
+                        onChange={(e) => updateResumeField('referenceRole', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="Program Leader"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Organization</label>
+                      <input
+                        value={resumeData.referenceOrganization}
+                        onChange={(e) => updateResumeField('referenceOrganization', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="Ithari International College"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Contact</label>
+                      <input
+                        value={resumeData.referenceContact}
+                        onChange={(e) => updateResumeField('referenceContact', e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-indigo-300"
+                        placeholder="santosh.parajuli@example.com"
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
 
-              {/* Projects */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <FaCode className="text-blue-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Projects</h3>
+              <aside className="lg:self-start">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-900">
+                    <FaEye className="text-sm" />
+                    <h3 className="text-sm font-semibold">Live Preview</h3>
                   </div>
-                  <button
-                    onClick={addProject}
-                    className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium"
-                  >
-                    <FaPlus /> Add
-                  </button>
-                </div>
 
-                <div className="space-y-4">
-                  {resumeData.projects.map((proj, index) => (
-                    <div key={proj.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <span className="text-sm font-medium text-gray-500">Project {index + 1}</span>
-                        {resumeData.projects.length > 1 && (
-                          <button
-                            onClick={() => removeProject(proj.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <FaTimes />
-                          </button>
-                        )}
+                  <p className="mt-1 text-xs text-slate-500">Full resume preview (updates live)</p>
+
+                  <div className="mt-4 rounded-lg border border-slate-200 bg-[#f8fafc] p-3 sm:p-4">
+                    {hasAnyPreviewContent ? (
+                      <div className="mx-auto w-full max-w-4xl">
+                        <ResumeTemplatePreview
+                          data={resumeData}
+                          template={selectedTemplate}
+                        />
                       </div>
-
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          value={proj.name}
-                          onChange={(e) => updateProject(proj.id, 'name', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Project Name"
-                        />
-                        <textarea
-                          value={proj.description}
-                          onChange={(e) => updateProject(proj.id, 'description', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-black"
-                          rows="2"
-                          placeholder="Project description..."
-                        />
-                        <input
-                          type="text"
-                          value={proj.technologies}
-                          onChange={(e) => updateProject(proj.id, 'technologies', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Technologies used (e.g., React, Node.js, MongoDB)"
-                        />
-                        <input
-                          type="text"
-                          value={proj.link}
-                          onChange={(e) => updateProject(proj.id, 'link', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Project link (optional)"
-                        />
-
+                    ) : (
+                      <div className="flex min-h-48 items-center justify-center text-center text-slate-400">
                         <div>
-                          <div className="flex justify-between items-center mb-2">
-                            <label className="text-sm font-medium text-gray-700">Key Highlights</label>
-                            <button
-                              onClick={() => addProjectHighlight(proj.id)}
-                              className="text-blue-600 hover:text-blue-700 text-xs flex items-center gap-1"
-                            >
-                              <FaPlus /> Add
-                            </button>
-                          </div>
-                          <div className="space-y-2">
-                            {proj.highlights.map((highlight, hIndex) => (
-                              <div key={hIndex} className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={highlight}
-                                  onChange={(e) => updateProjectHighlight(proj.id, hIndex, e.target.value)}
-                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                                  placeholder="Project highlight..."
-                                />
-                                {proj.highlights.length > 1 && (
-                                  <button
-                                    onClick={() => removeProjectHighlight(proj.id, hIndex)}
-                                    className="text-red-600 hover:text-red-700 px-2"
-                                  >
-                                    <FaTimes />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                          <FaRegFileAlt className="mx-auto text-4xl" />
+                          <p className="mt-2 text-sm">Resume preview</p>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Certifications */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <FaAward className="text-blue-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Certifications</h3>
-                  </div>
-                  <button
-                    onClick={addCertification}
-                    className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium"
-                  >
-                    <FaPlus /> Add
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {resumeData.certifications.map((cert, index) => (
-                    <div key={cert.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <span className="text-sm font-medium text-gray-500">Certification {index + 1}</span>
-                        {resumeData.certifications.length > 1 && (
-                          <button
-                            onClick={() => removeCertification(cert.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <FaTimes />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          value={cert.name}
-                          onChange={(e) => updateCertification(cert.id, 'name', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Certification Name"
-                        />
-                        <div className="grid grid-cols-2 gap-3">
-                          <input
-                            type="text"
-                            value={cert.issuer}
-                            onChange={(e) => updateCertification(cert.id, 'issuer', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                            placeholder="Issuing Organization"
-                          />
-                          <input
-                            type="month"
-                            value={cert.date}
-                            onChange={(e) => updateCertification(cert.id, 'date', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          value={cert.credentialId}
-                          onChange={(e) => updateCertification(cert.id, 'credentialId', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                          placeholder="Credential ID (optional)"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="lg:sticky lg:top-8 lg:self-start">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8" ref={printRef}>
-                <div className="space-y-6">
-                  {/* Header */}
-                  <div className="text-center border-b-2 border-gray-900 pb-4">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                      {resumeData.fullName || 'Your Name'}
-                    </h1>
-                    <div className="flex flex-wrap justify-center gap-3 text-sm text-gray-600">
-                      {resumeData.email && (
-                        <span className="flex items-center gap-1">
-                          <FaEnvelope className="text-xs" />
-                          {resumeData.email}
-                        </span>
-                      )}
-                      {resumeData.phone && (
-                        <span className="flex items-center gap-1">
-                          <FaPhone className="text-xs" />
-                          {resumeData.phone}
-                        </span>
-                      )}
-                      {resumeData.location && (
-                        <span className="flex items-center gap-1">
-                          <FaMapMarkerAlt className="text-xs" />
-                          {resumeData.location}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap justify-center gap-3 text-sm text-blue-600 mt-2">
-                      {resumeData.linkedin && (
-                        <span className="flex items-center gap-1">
-                          <FaLinkedin className="text-xs" />
-                          {`linkedin.com/in/${resumeData.linkedin}`}
-                        </span>
-                      )}
-                      {resumeData.github && (
-                        <span className="flex items-center gap-1">
-                          <FaGithub className="text-xs" />
-                          {`github.com/${resumeData.github}`}
-                        </span>
-                      )}
-                      {resumeData.portfolio && (
-                        <span className="flex items-center gap-1">
-                          <FaLink className="text-xs" />
-                          {resumeData.portfolio}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-
-                  {resumeData.professionalSummary && (
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 mb-2 pb-1 border-b border-gray-300">
-                        PROFESSIONAL SUMMARY
-                      </h2>
-                      <p className="text-sm text-gray-700 leading-relaxed">
-                        {resumeData.professionalSummary}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Experience */}
-                  {resumeData.experience.some(exp => exp.jobTitle || exp.company) && (
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 mb-3 pb-1 border-b border-gray-300">
-                        WORK EXPERIENCE
-                      </h2>
-                      <div className="space-y-4">
-                        {resumeData.experience.map((exp) => {
-                          if (!exp.jobTitle && !exp.company) return null
-                          return (
-                            <div key={exp.id}>
-                              <div className="flex justify-between items-start mb-1">
-                                <div>
-                                  <h3 className="font-bold text-gray-900">{exp.jobTitle}</h3>
-                                  <p className="text-sm text-gray-700">{exp.company}</p>
-                                </div>
-                                <div className="text-right text-sm text-gray-600">
-                                  {exp.location && <div>{exp.location}</div>}
-                                  <div>
-                                    {exp.startDate && new Date(exp.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                                    {' - '}
-                                    {exp.current ? 'Present' : (exp.endDate ? new Date(exp.endDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '')}
-                                  </div>
-                                </div>
-                              </div>
-                              {exp.description && (
-                                <p className="text-sm text-gray-700 mb-2">{exp.description}</p>
-                              )}
-                              {exp.achievements.some(a => a.trim()) && (
-                                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-                                  {exp.achievements.filter(a => a.trim()).map((achievement, i) => (
-                                    <li key={i}>{achievement}</li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Education */}
-                  {resumeData.education.some(edu => edu.degree || edu.institution) && (
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 mb-3 pb-1 border-b border-gray-300">
-                        EDUCATION
-                      </h2>
-                      <div className="space-y-3">
-                        {resumeData.education.map((edu) => {
-                          if (!edu.degree && !edu.institution) return null
-                          return (
-                            <div key={edu.id}>
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <h3 className="font-bold text-gray-900">{edu.degree}</h3>
-                                  <p className="text-sm text-gray-700">{edu.institution}</p>
-                                  {(edu.gpa || edu.honors) && (
-                                    <p className="text-sm text-gray-600">
-                                      {edu.gpa && `GPA: ${edu.gpa}`}
-                                      {edu.gpa && edu.honors && ' | '}
-                                      {edu.honors}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="text-right text-sm text-gray-600">
-                                  {edu.location && <div>{edu.location}</div>}
-                                  {edu.graduationDate && (
-                                    <div>
-                                      {new Date(edu.graduationDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Skills */}
-                  {Object.values(resumeData.skills).some(arr => arr.length > 0) && (
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 mb-3 pb-1 border-b border-gray-300">
-                        SKILLS
-                      </h2>
-                      <div className="space-y-2">
-                        {resumeData.skills.technical.length > 0 && (
-                          <div>
-                            <span className="font-semibold text-sm text-gray-900">Technical: </span>
-                            <span className="text-sm text-gray-700">
-                              {resumeData.skills.technical.join(' • ')}
-                            </span>
-                          </div>
-                        )}
-                        {resumeData.skills.tools.length > 0 && (
-                          <div>
-                            <span className="font-semibold text-sm text-gray-900">Tools: </span>
-                            <span className="text-sm text-gray-700">
-                              {resumeData.skills.tools.join(' • ')}
-                            </span>
-                          </div>
-                        )}
-                        {resumeData.skills.soft.length > 0 && (
-                          <div>
-                            <span className="font-semibold text-sm text-gray-900">Soft Skills: </span>
-                            <span className="text-sm text-gray-700">
-                              {resumeData.skills.soft.join(' • ')}
-                            </span>
-                          </div>
-                        )}
-                        {resumeData.skills.languages.length > 0 && (
-                          <div>
-                            <span className="font-semibold text-sm text-gray-900">Languages: </span>
-                            <span className="text-sm text-gray-700">
-                              {resumeData.skills.languages.join(' • ')}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Projects */}
-                  {resumeData.projects.some(proj => proj.name) && (
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 mb-3 pb-1 border-b border-gray-300">
-                        PROJECTS
-                      </h2>
-                      <div className="space-y-3">
-                        {resumeData.projects.map((proj) => {
-                          if (!proj.name) return null
-                          return (
-                            <div key={proj.id}>
-                              <div className="flex justify-between items-start mb-1">
-                                <h3 className="font-bold text-gray-900">{proj.name}</h3>
-                                {proj.link && (
-                                  <a href={proj.link} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                                    <FaLink className="text-xs" /> Link
-                                  </a>
-                                )}
-                              </div>
-                              {proj.technologies && (
-                                <p className="text-xs text-gray-600 mb-1">
-                                  <span className="font-semibold">Technologies:</span> {proj.technologies}
-                                </p>
-                              )}
-                              {proj.description && (
-                                <p className="text-sm text-gray-700 mb-1">{proj.description}</p>
-                              )}
-                              {proj.highlights.some(h => h.trim()) && (
-                                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-                                  {proj.highlights.filter(h => h.trim()).map((highlight, i) => (
-                                    <li key={i}>{highlight}</li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Certifications */}
-                  {resumeData.certifications.some(cert => cert.name) && (
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900 mb-3 pb-1 border-b border-gray-300">
-                        CERTIFICATIONS
-                      </h2>
-                      <div className="space-y-2">
-                        {resumeData.certifications.map((cert) => {
-                          if (!cert.name) return null
-                          return (
-                            <div key={cert.id} className="flex justify-between items-start">
-                              <div>
-                                <h3 className="font-semibold text-sm text-gray-900">{cert.name}</h3>
-                                <p className="text-sm text-gray-700">{cert.issuer}</p>
-                                {cert.credentialId && (
-                                  <p className="text-xs text-gray-600">Credential ID: {cert.credentialId}</p>
-                                )}
-                              </div>
-                              {cert.date && (
-                                <div className="text-sm text-gray-600">
-                                  {new Date(cert.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Footer */}
-                  <div className="text-center pt-4 border-t border-gray-300">
-                    <p className="text-xs text-gray-500">
-                      Generated by Smart Career Counselling Platform • {new Date().toLocaleDateString()}
-                    </p>
+                    )}
                   </div>
                 </div>
-              </div>
+              </aside>
             </div>
           </div>
         </main>
+      </div>
+
+      <div className="hidden">
+        <div ref={printRef} className="mx-auto max-w-225 p-4">
+          <ResumeTemplatePreview data={resumeData} template={selectedTemplate} />
+        </div>
       </div>
     </div>
   )

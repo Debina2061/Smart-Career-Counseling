@@ -1,11 +1,11 @@
-﻿import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FaArrowRight,
   FaBell,
   FaBriefcase,
+  FaBullseye,
   FaChartLine,
-  FaChevronDown,
-  FaClipboardList,
+  FaCheckCircle,
   FaComments,
   FaFileAlt,
   FaMapPin,
@@ -15,17 +15,69 @@ import {
 } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import StudentProfileDropdown from '../components/StudentProfileDropdown'
 import { useAuth } from '../context/AuthContext'
-import { userAPI, authAPI } from '../utils/api'
+import { authAPI, userAPI } from '../utils/api'
 
-const formatDate = (value) => (value ? new Date(value).toLocaleDateString() : '--')
+const formatDate = (value) => {
+  if (!value) return '--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--'
+
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+const daysSince = (value) => {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const diff = Date.now() - date.getTime()
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
+}
+
+const formatRelativeDay = (value) => {
+  const days = daysSince(value)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  return formatDate(value)
+}
 
 const statusTone = (status) => {
   const value = (status || '').toLowerCase()
-  if (value.includes('interview')) return 'bg-emerald-50 text-emerald-700'
-  if (value.includes('shortlist') || value.includes('review')) return 'bg-blue-50 text-blue-700'
-  if (value.includes('reject')) return 'bg-rose-50 text-rose-700'
-  return 'bg-slate-100 text-slate-700'
+
+  if (value.includes('interview')) return 'border-emerald-200 bg-emerald-100 text-emerald-700'
+  if (value.includes('shortlist') || value.includes('review')) return 'border-blue-200 bg-blue-100 text-blue-700'
+  if (value.includes('reject')) return 'border-rose-200 bg-rose-100 text-rose-700'
+  if (value.includes('applied') || value.includes('pending')) return 'border-amber-200 bg-amber-100 text-amber-700'
+
+  return 'border-slate-200 bg-slate-100 text-slate-700'
+}
+
+const growthTone = (growth) => {
+  const value = (growth || '').toLowerCase()
+
+  if (value.includes('high')) {
+    return {
+      label: growth || 'High Demand',
+      tone: 'border-slate-200 bg-slate-100 text-slate-700',
+    }
+  }
+
+  if (value.includes('grow')) {
+    return {
+      label: growth || 'Growing',
+      tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    }
+  }
+
+  return {
+    label: growth || 'Stable',
+    tone: 'border-slate-200 bg-slate-50 text-slate-600',
+  }
 }
 
 function Dashboard() {
@@ -36,7 +88,7 @@ function Dashboard() {
   const [showNotifications, setShowNotifications] = useState(false)
   const notificationRef = useRef(null)
 
-  // ── Email verification state ──
+  // Email verification state
   const OTP_LENGTH = 6
   const RESEND_COOLDOWN = 60
   const [showOtpInput, setShowOtpInput] = useState(false)
@@ -60,15 +112,21 @@ function Dashboard() {
     setOtp(next)
     if (value && index < OTP_LENGTH - 1) otpRefs.current[index + 1]?.focus()
   }
+
   const handleOtpKeyDown = (index, e) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) otpRefs.current[index - 1]?.focus()
   }
+
   const handleOtpPaste = (e) => {
     e.preventDefault()
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH)
     if (!pasted) return
+
     const next = [...otp]
-    pasted.split('').forEach((ch, i) => { next[i] = ch })
+    pasted.split('').forEach((ch, i) => {
+      next[i] = ch
+    })
+
     setOtp(next)
     otpRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus()
   }
@@ -76,6 +134,7 @@ function Dashboard() {
   const sendVerificationOtp = async () => {
     setVerifyError('')
     setVerifyStatus('')
+
     try {
       await authAPI.resendOtp(user.email, 'verify')
       setShowOtpInput(true)
@@ -88,16 +147,22 @@ function Dashboard() {
 
   const handleVerifyOtp = useCallback(async () => {
     const code = otp.join('')
-    if (code.length !== OTP_LENGTH) { setVerifyError('Enter the full 6-digit code'); return }
+    if (code.length !== OTP_LENGTH) {
+      setVerifyError('Enter the full 6-digit code')
+      return
+    }
+
     setVerifyLoading(true)
     setVerifyError('')
+
     try {
       await authAPI.verifyOtp(user.email, code)
-      // Refresh user state
       try {
         const profile = await authAPI.getProfile()
         updateUser(profile.user || profile)
-      } catch { /* ignore */ }
+      } catch {
+        // Ignore profile refresh failures after successful OTP verify.
+      }
       setVerifyStatus('Email verified successfully!')
       setShowOtpInput(false)
     } catch (err) {
@@ -108,7 +173,7 @@ function Dashboard() {
   }, [otp, user?.email, updateUser])
 
   useEffect(() => {
-    if (otp.every((d) => d !== '')) handleVerifyOtp()
+    if (otp.every((digit) => digit !== '')) handleVerifyOtp()
   }, [otp, handleVerifyOtp])
 
   useEffect(() => {
@@ -117,14 +182,13 @@ function Dashboard() {
         setShowNotifications(false)
       }
     }
+
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   useEffect(() => {
-    if (user) {
-      loadDashboard()
-    }
+    if (user) loadDashboard()
   }, [user])
 
   const loadDashboard = async () => {
@@ -146,151 +210,163 @@ function Dashboard() {
   const applications = dashboard?.applications
   const chat = dashboard?.chat
 
-  const displayName = profile?.name || user?.fullName || user?.name || user?.email?.split('@')[0] || 'User'
+  const displayName =
+    profile?.name || user?.fullName || user?.name || user?.email?.split('@')[0] || 'Student'
+
   const avatarUrl =
     profile?.avatarUrl ||
     user?.avatarUrl ||
     user?.avatar ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || 'User'}`
+    `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || 'Student'}`
 
   const completionPercent = profile?.completionPercent ?? 0
   const atsScore = resume?.atsScore ?? null
   const isResumeProcessing = resume?.analysisStatus === 'processing'
+  const resumeAgeDays = daysSince(resume?.updatedAt)
 
-  const actionItems = useMemo(() => {
+  const reminders = useMemo(() => {
     const items = []
-    if (!resume?.hasResume) {
-      items.push({
-        id: 'resume',
-        title: 'Upload your resume',
-        description: 'Scan it to unlock ATS insights and skill extraction.',
-        cta: 'Upload Resume',
-        link: '/profile',
-        icon: FaFileAlt,
-      })
-    }
+
     if ((completionPercent || 0) < 80) {
       items.push({
         id: 'profile',
-        title: 'Complete your profile',
-        description: 'Add missing details to improve your recommendations.',
-        cta: 'Update Profile',
+        title: 'Complete Your Profile',
+        description: 'Add your skills and interests to get better recommendations',
+        cta: 'Complete Now',
         link: '/profile',
         icon: FaUserCheck,
+        tone: 'border-amber-200 bg-amber-50',
+        iconTone: 'bg-amber-100 text-amber-600',
+        buttonTone: 'border border-amber-300 bg-white text-amber-700 hover:bg-amber-100',
       })
     }
-    if ((recommendations?.count || 0) === 0) {
+
+    if (!resume?.hasResume || (resumeAgeDays !== null && resumeAgeDays >= 14)) {
       items.push({
-        id: 'recommendations',
-        title: 'Generate recommendations',
-        description: 'Get the top career paths matched to your skills.',
-        cta: 'Generate Now',
-        link: '/career-recommendation',
-        icon: FaMapPin,
+        id: 'resume',
+        title: 'Update Your Resume',
+        description:
+          resume?.hasResume && resumeAgeDays !== null
+            ? `Your resume was last updated ${resumeAgeDays} day${resumeAgeDays === 1 ? '' : 's'} ago`
+            : 'Upload your resume to unlock ATS scoring and recommendations',
+        cta: resume?.hasResume ? 'Update Resume' : 'Upload Resume',
+        link: '/profile',
+        icon: FaFileAlt,
+        tone: 'border-blue-200 bg-blue-50',
+        iconTone: 'bg-blue-100 text-blue-600',
+        buttonTone: 'border border-blue-300 bg-white text-blue-700 hover:bg-blue-100',
       })
+    }
+
+    return items
+  }, [completionPercent, resume?.hasResume, resumeAgeDays])
+
+  const notifications = useMemo(() => {
+    const items = reminders.map((item) => item.title)
+    if (user && user.isVerified === false) {
+      items.unshift('Verify your email to unlock full account features')
     }
     return items
-  }, [completionPercent, recommendations?.count, resume?.hasResume])
-
-  const notifications = actionItems.map((item) => item.title)
+  }, [reminders, user])
 
   const stats = [
     {
       label: 'Profile Completion',
       value: `${completionPercent}%`,
-      icon: FaUserCheck,
-      accent: 'bg-teal-100 text-teal-700',
+      subValue: 'Keep improving',
+      icon: FaCheckCircle,
+      iconTone: 'bg-emerald-100 text-emerald-600',
+      progress: completionPercent,
     },
     {
       label: 'ATS Resume Score',
-      value: atsScore !== null ? `${atsScore}%` : '--',
+      value: atsScore !== null ? `${atsScore}/100` : '--',
+      subValue: isResumeProcessing ? 'Analyzing...' : 'Optimized',
       icon: FaFileAlt,
-      accent: 'bg-amber-100 text-amber-700',
+      iconTone: 'bg-indigo-100 text-indigo-600',
+      progress: atsScore,
     },
     {
       label: 'Applications',
       value: `${applications?.count ?? 0}`,
-      icon: FaBriefcase,
-      accent: 'bg-slate-100 text-slate-700',
+      subValue: 'In progress',
+      icon: FaBullseye,
+      iconTone: 'bg-amber-100 text-amber-600',
+      progress: null,
     },
     {
-      label: 'Recommendations',
+      label: 'Career Matches',
       value: `${recommendations?.count ?? 0}`,
-      icon: FaStar,
-      accent: 'bg-indigo-100 text-indigo-700',
+      subValue: 'Found for you',
+      icon: FaChartLine,
+      iconTone: 'bg-violet-100 text-violet-600',
+      progress: null,
     },
   ]
 
   const quickActions = [
     {
       title: 'Scan Resume',
-      description: 'Instant ATS feedback and format checks.',
-      cta: 'Start Scan',
+      description: 'Get instant ATS score and improvements',
+      cta: 'Get Started',
       link: '/ats-scanner',
       icon: FaFileAlt,
-      gradient: 'from-teal-600 via-emerald-500 to-lime-400',
+      iconTone: 'bg-[#4f46e5] text-white',
     },
     {
       title: 'Career Matches',
-      description: 'See top roles matched to your skills.',
-      cta: 'View Matches',
+      description: 'View personalized recommendations',
+      cta: 'Get Started',
       link: '/career-recommendation',
       icon: FaMapPin,
-      gradient: 'from-slate-900 via-slate-800 to-slate-700',
+      iconTone: 'bg-[#059669] text-white',
     },
     {
       title: 'AI Coach',
-      description: 'Get guidance tailored to your goals.',
-      cta: 'Ask Now',
+      description: 'Get career guidance 24/7',
+      cta: 'Get Started',
       link: '/ai-chatbot',
       icon: FaRobot,
-      gradient: 'from-indigo-600 via-violet-600 to-purple-600',
+      iconTone: 'bg-[#2563eb] text-white',
     },
   ]
 
-  const topCareers = recommendations?.topCareers || []
-  const recentApplications = applications?.recent || []
-  const recentChats = chat?.sessions || []
+  const topCareers = (recommendations?.topCareers || []).slice(0, 4)
+  const recentApplications = (applications?.recent || []).slice(0, 4)
+  const recentChats = (chat?.sessions || []).slice(0, 3)
 
   return (
-    <div className="flex h-screen bg-linear-to-br from-slate-50 via-stone-50 to-amber-50">
+    <div className="flex min-h-screen bg-[#f3f4f8]">
       <Sidebar />
 
-      <div className="flex-1 ml-52 flex flex-col overflow-hidden">
-        <header className="bg-white/80 backdrop-blur border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-linear-to-br from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-sm">
-              <FaChartLine className="text-lg" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-slate-500">Overview</p>
-              <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="relative" ref={notificationRef}>
+      <div className="ml-52 flex min-h-screen flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-end border-b border-slate-200 bg-white px-4 sm:px-6">
+          <div className="flex items-center gap-3" ref={notificationRef}>
+            <div className="relative">
               <button
                 onClick={() => setShowNotifications((prev) => !prev)}
-                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Notifications"
               >
-                <FaBell className="text-xl" />
-                {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full"></span>
-                )}
+                <FaBell className="text-lg" />
               </button>
+              {notifications.length > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                  {notifications.length}
+                </span>
+              )}
+
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-20">
-                  <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-900">
+                <div className="absolute right-0 mt-2 w-80 rounded-lg border border-slate-200 bg-white shadow-xl">
+                  <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
                     Notifications
                   </div>
                   {notifications.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-slate-500">You are all caught up.</div>
+                    <div className="px-4 py-5 text-sm text-slate-500">You are all caught up.</div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
                       {notifications.map((item, index) => (
-                        <div key={index} className="px-4 py-3 text-sm text-slate-700">
+                        <div key={`${item}-${index}`} className="px-4 py-3 text-sm text-slate-700">
                           {item}
                         </div>
                       ))}
@@ -300,360 +376,290 @@ function Dashboard() {
               )}
             </div>
 
-            <Link to="/profile" className="flex items-center gap-3 border-l border-slate-200 pl-4">
-              <div className="text-right">
-                <p className="text-sm font-semibold text-slate-900">{displayName}</p>
-                <p className="text-xs text-slate-500">Career Builder</p>
-              </div>
-              <img src={avatarUrl} alt={displayName} className="w-10 h-10 rounded-full object-cover" />
-              <FaChevronDown className="text-slate-400 text-sm" />
-            </Link>
+            <StudentProfileDropdown
+              name={displayName}
+              email={profile?.email || user?.email || 'student@demo.com'}
+              avatar={avatarUrl}
+              className="border-l border-slate-200 pl-3"
+            />
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8">
-          {error && (
-            <div className="mb-6 px-4 py-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-100">
-              {error}
+        <main className="flex-1 overflow-y-auto bg-[#f5f7fb] p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-6xl space-y-5">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Welcome back, {displayName}! <span aria-hidden="true">👋</span></h1>
+              <p className="mt-1 text-slate-600">Here's your career progress overview</p>
             </div>
-          )}
 
-          {/* ── Unverified email banner ── */}
-          {user && user.isVerified === false && (
-            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                    </svg>
-                  </div>
+            {error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </div>
+            )}
+
+            {user && user.isVerified === false && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h4 className="font-semibold text-amber-900">Your email is not verified</h4>
-                    <p className="text-sm text-amber-700 mt-0.5">
-                      Verify <span className="font-medium">{user.email}</span> to unlock the full experience.
-                    </p>
+                    <p className="font-semibold text-amber-900">Verify your email address</p>
+                    <p className="text-sm text-amber-700">Please verify {user.email} to unlock the full experience.</p>
                   </div>
+
+                  {!showOtpInput && (
+                    <button
+                      onClick={sendVerificationOtp}
+                      className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+                    >
+                      Verify Now
+                    </button>
+                  )}
                 </div>
 
-                {!showOtpInput && (
-                  <button
-                    onClick={sendVerificationOtp}
-                    className="shrink-0 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition"
-                  >
-                    Verify Now
-                  </button>
+                {verifyError && <p className="mt-3 text-sm text-rose-600">{verifyError}</p>}
+                {verifyStatus && !showOtpInput && <p className="mt-3 text-sm text-emerald-700">{verifyStatus}</p>}
+
+                {showOtpInput && (
+                  <div className="mt-4 border-t border-amber-200 pt-4">
+                    <p className="text-sm font-medium text-amber-800">Enter the 6-digit code sent to your email</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2" onPaste={handleOtpPaste}>
+                      {otp.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={(el) => {
+                            otpRefs.current[index] = el
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleOtpChange(index, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                          className="h-11 w-10 rounded-lg border-2 border-amber-300 bg-white text-center text-lg font-bold text-slate-900 outline-none transition focus:border-amber-500"
+                        />
+                      ))}
+
+                      <button
+                        onClick={handleVerifyOtp}
+                        disabled={verifyLoading || otp.join('').length !== OTP_LENGTH}
+                        className="ml-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {verifyLoading ? 'Verifying...' : 'Verify'}
+                      </button>
+                    </div>
+
+                    <div className="mt-3 text-sm text-amber-700">
+                      {resendTimer > 0 ? (
+                        <span>Resend code in <span className="font-semibold">{resendTimer}s</span></span>
+                      ) : (
+                        <button onClick={sendVerificationOtp} className="font-semibold hover:underline">
+                          Resend Code
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
+            )}
 
-              {verifyError && (
-                <div className="mt-3 text-sm text-red-600">{verifyError}</div>
-              )}
-              {verifyStatus && !showOtpInput && (
-                <div className="mt-3 text-sm text-emerald-700">{verifyStatus}</div>
-              )}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {stats.map((stat) => {
+                const Icon = stat.icon
 
-              {showOtpInput && (
-                <div className="mt-4 pt-4 border-t border-amber-200">
-                  {verifyStatus && (
-                    <p className="text-sm text-emerald-700 mb-3">{verifyStatus}</p>
-                  )}
-                  <p className="text-sm text-amber-800 mb-3 font-medium">Enter the 6-digit code sent to your email</p>
-                  <div className="flex items-center gap-3 flex-wrap" onPaste={handleOtpPaste}>
-                    {otp.map((digit, i) => (
-                      <input
-                        key={i}
-                        ref={(el) => (otpRefs.current[i] = el)}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpChange(i, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                        className="h-12 w-10 rounded-lg border-2 border-amber-300 bg-white text-center text-xl font-bold text-slate-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none transition-all"
-                      />
-                    ))}
-                    <button
-                      onClick={handleVerifyOtp}
-                      disabled={verifyLoading || otp.join('').length !== OTP_LENGTH}
-                      className="ml-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-                    >
-                      {verifyLoading ? 'Verifying...' : 'Verify'}
-                    </button>
-                  </div>
-                  <div className="mt-3 text-sm text-amber-700">
-                    {resendTimer > 0 ? (
-                      <span>Resend code in <span className="font-semibold">{resendTimer}s</span></span>
-                    ) : (
-                      <button onClick={sendVerificationOtp} className="font-semibold hover:underline">
-                        Resend Code
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-            <section className="xl:col-span-8 space-y-6">
-              <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-8">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-slate-500">Career snapshot</p>
-                    <h1 className="text-3xl font-bold text-slate-900 mt-2">Welcome back, {displayName}.</h1>
-                    <p className="text-slate-600 mt-2">
-                      Stay focused on the essentials. Your progress, resume strength, and next steps are all in one place.
-                    </p>
-                  </div>
-                  <div className="w-full md:w-64 bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <p className="text-xs uppercase tracking-widest text-slate-500">Profile completion</p>
-                    <div className="mt-3 h-2 w-full rounded-full bg-slate-200">
-                      <div
-                        className="h-2 rounded-full bg-linear-to-r from-teal-500 via-emerald-400 to-amber-400"
-                        style={{ width: `${Math.min(100, completionPercent)}%` }}
-                      ></div>
+                return (
+                  <article key={stat.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl ${stat.iconTone}`}>
+                      <Icon className="text-lg" />
                     </div>
-                    <p className="text-sm font-semibold text-slate-700 mt-3">
-                      {completionPercent}% complete
-                    </p>
-                  </div>
-                </div>
+                    <p className="text-sm text-slate-500">{stat.label}</p>
+                    <p className="mt-1 text-4xl font-bold leading-none text-slate-900">{stat.value}</p>
+                    <p className="mt-2 text-sm text-slate-500">{stat.subValue}</p>
 
-                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {stats.map((stat, index) => {
-                    const Icon = stat.icon
-                    return (
-                      <div key={index} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                        <div className="flex items-center justify-between">
-                          <div className={`w-10 h-10 rounded-lg ${stat.accent} flex items-center justify-center`}>
-                            <Icon className="text-lg" />
-                          </div>
-                          <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
-                        </div>
-                        <p className="text-sm text-slate-500 mt-3">{stat.label}</p>
+                    {stat.progress !== null && (
+                      <div className="mt-3 h-1.5 w-full rounded-full bg-slate-200">
+                        <div
+                          className="h-1.5 rounded-full bg-[#4f46e5]"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, stat.progress || 0))}%`,
+                          }}
+                        />
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {quickActions.map((action, index) => {
+            {reminders.length > 0 && (
+              <div className="space-y-3">
+                {reminders.map((item) => {
+                  const Icon = item.icon
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${item.tone}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg ${item.iconTone}`}>
+                          <Icon className="text-sm" />
+                        </span>
+                        <div>
+                          <p className="font-semibold text-slate-800">{item.title}</p>
+                          <p className="text-sm text-slate-600">{item.description}</p>
+                        </div>
+                      </div>
+
+                      <Link
+                        to={item.link}
+                        className={`inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${item.buttonTone}`}
+                      >
+                        {item.cta}
+                      </Link>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <section>
+              <h2 className="text-2xl font-bold text-slate-900">Quick Actions</h2>
+              <div className="mt-3 grid gap-4 md:grid-cols-3">
+                {quickActions.map((action) => {
                   const Icon = action.icon
+
                   return (
                     <Link
-                      key={index}
+                      key={action.title}
                       to={action.link}
-                      className={`bg-linear-to-br ${action.gradient} rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition`}
+                      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                          <Icon className="text-xl" />
-                        </div>
-                      </div>
-                      <h3 className="text-xl font-bold mt-6">{action.title}</h3>
-                      <p className="text-sm opacity-90 mt-2">{action.description}</p>
-                      <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold bg-white/20 px-4 py-2 rounded-full">
+                      <span className={`flex h-12 w-12 items-center justify-center rounded-xl text-lg ${action.iconTone}`}>
+                        <Icon />
+                      </span>
+                      <p className="mt-4 text-2xl font-bold text-slate-900">{action.title}</p>
+                      <p className="mt-1 text-sm text-slate-600">{action.description}</p>
+                      <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#4f46e5]">
                         {action.cta}
-                        <FaArrowRight />
-                      </div>
+                        <FaArrowRight className="text-xs" />
+                      </span>
                     </Link>
                   )
                 })}
               </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-widest text-slate-500">Career matches</p>
-                      <h3 className="text-xl font-bold text-slate-900">Top Recommendations</h3>
-                    </div>
-                    <Link to="/career-recommendation" className="text-sm font-semibold text-teal-600">
-                      View all
-                    </Link>
-                  </div>
-                  {topCareers.length === 0 ? (
-                    <div className="border border-dashed border-slate-200 rounded-xl p-6 text-sm text-slate-500">
-                      No recommendations yet. Generate your first career matches.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {topCareers.map((career, index) => (
-                        <div
-                          key={`${career.careerName}-${index}`}
-                          className="flex items-center justify-between border border-slate-200 rounded-xl px-4 py-3"
-                        >
-                          <div>
-                            <p className="font-semibold text-slate-900">{career.careerName}</p>
-                            <p className="text-xs text-slate-500">
-                              Growth: {career.growthPotential || 'Stable'}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-slate-900">{career.matchScore || 0}%</p>
-                            <p className="text-xs text-slate-500">Match score</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-widest text-slate-500">Applications</p>
-                      <h3 className="text-xl font-bold text-slate-900">Recent Activity</h3>
-                    </div>
-                    <Link to="/career-recommendation" className="text-sm font-semibold text-teal-600">
-                      Explore careers
-                    </Link>
-                  </div>
-                  {recentApplications.length === 0 ? (
-                    <div className="border border-dashed border-slate-200 rounded-xl p-6 text-sm text-slate-500">
-                      No applications yet. Apply to jobs and track them here.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {recentApplications.map((app, index) => (
-                        <div key={`${app.jobTitle}-${index}`} className="border border-slate-200 rounded-xl p-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <p className="font-semibold text-slate-900">{app.jobTitle}</p>
-                              <p className="text-sm text-slate-500">{app.company}</p>
-                            </div>
-                            <span className={`text-xs px-2 py-1 rounded-full ${statusTone(app.status)}`}>
-                              {app.status || 'Pending'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between mt-3 text-xs text-slate-500">
-                            <span>Applied {formatDate(app.appliedAt)}</span>
-                            <span>Match {app.matchScore || 0}%</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
             </section>
 
-            <aside className="xl:col-span-4 space-y-6">
-              <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-slate-500">Focus</p>
-                    <h3 className="text-xl font-bold text-slate-900">Next Steps</h3>
-                  </div>
-                  <FaClipboardList className="text-slate-400" />
+            <div className="grid gap-4 xl:grid-cols-2">
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-900">Top Career Matches</h3>
+                  <Link to="/career-recommendation" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
+                    View All
+                    <FaArrowRight className="text-xs" />
+                  </Link>
                 </div>
 
-                {actionItems.length === 0 ? (
-                  <div className="border border-dashed border-slate-200 rounded-xl p-6 text-sm text-slate-500">
-                    You are all set. Keep applying and refining your resume.
+                {topCareers.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-500">
+                    No recommendations yet. Generate your first career matches.
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {actionItems.map((item) => {
-                      const Icon = item.icon
+                    {topCareers.map((career, index) => {
+                      const trend = growthTone(career.growthPotential)
+
                       return (
-                        <div key={item.id} className="border border-slate-200 rounded-xl p-4">
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
-                              <Icon />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-slate-900">{item.title}</p>
-                              <p className="text-sm text-slate-500 mt-1">{item.description}</p>
-                              <Link to={item.link} className="inline-flex items-center gap-2 text-sm font-semibold text-teal-600 mt-3">
-                                {item.cta}
-                                <FaArrowRight />
-                              </Link>
-                            </div>
+                        <div key={`${career.careerName}-${index}`} className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-900">{career.careerName}</p>
+                            <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${trend.tone}`}>
+                              {trend.label}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-3xl font-bold leading-none text-emerald-600">{career.matchScore || 0}%</p>
+                            <p className="mt-1 text-xs text-slate-500">Match</p>
                           </div>
                         </div>
                       )
                     })}
                   </div>
                 )}
-              </div>
+              </section>
 
-              <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-slate-500">Resume</p>
-                    <h3 className="text-xl font-bold text-slate-900">Latest Snapshot</h3>
-                  </div>
-                  <FaFileAlt className="text-slate-400" />
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between text-sm text-slate-600">
-                    <span>ATS Score</span>
-                    <span className="font-semibold text-slate-900">
-                      {isResumeProcessing ? 'Processing' : atsScore !== null ? `${atsScore}%` : 'Not scanned'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm text-slate-600">
-                    <span>Last updated</span>
-                    <span className="font-semibold text-slate-900">
-                      {resume?.updatedAt ? formatDate(resume.updatedAt) : '--'}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-slate-200">
-                    <div
-                      className="h-2 rounded-full bg-linear-to-r from-amber-500 via-amber-400 to-yellow-300"
-                      style={{ width: `${Math.min(100, atsScore || 0)}%` }}
-                    ></div>
-                  </div>
-                  <Link
-                    to="/ats-scanner"
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-teal-600"
-                  >
-                    Run a fresh scan
-                    <FaArrowRight />
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-900">Recent Applications</h3>
+                  <Link to="/career-recommendation" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
+                    View All
+                    <FaArrowRight className="text-xs" />
                   </Link>
                 </div>
-              </div>
 
-              <div className="bg-white/90 rounded-2xl shadow-xl border border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-slate-500">AI Coach</p>
-                    <h3 className="text-xl font-bold text-slate-900">Recent Chats</h3>
-                  </div>
-                  <FaComments className="text-slate-400" />
-                </div>
-                {recentChats.length === 0 ? (
-                  <div className="border border-dashed border-slate-200 rounded-xl p-6 text-sm text-slate-500">
-                    No chats yet. Start a conversation to keep track of your guidance.
+                {recentApplications.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-500">
+                    No applications yet. Apply to jobs and track them here.
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {recentChats.map((chatItem) => (
-                      <div key={chatItem.id} className="border border-slate-200 rounded-xl p-4">
-                        <p className="font-semibold text-slate-900">{chatItem.title || 'Career Session'}</p>
-                        <p className="text-sm text-slate-500 mt-1">{chatItem.lastMessage || 'New chat started.'}</p>
-                        <div className="flex items-center justify-between text-xs text-slate-500 mt-3">
-                          <span>{chatItem.messageCount} messages</span>
-                          <span>{formatDate(chatItem.updatedAt)}</span>
+                    {recentApplications.map((app, index) => (
+                      <div key={`${app.jobTitle}-${index}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">{app.jobTitle}</p>
+                            <p className="text-sm text-slate-500">{app.company}</p>
+                            <p className="mt-1 text-xs text-slate-400">{formatDate(app.appliedAt)}</p>
+                          </div>
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusTone(app.status)}`}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                            {app.status || 'Pending'}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
-                <Link to="/ai-chatbot" className="inline-flex items-center gap-2 text-sm font-semibold text-teal-600 mt-4">
-                  Open AI Coach
-                  <FaArrowRight />
+              </section>
+            </div>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-xl font-bold text-slate-900">Recent AI Chat Sessions</h3>
+                <Link to="/ai-chatbot" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
+                  View All
+                  <FaArrowRight className="text-xs" />
                 </Link>
               </div>
-            </aside>
-          </div>
 
-          {loading && (
-            <div className="mt-6 text-sm text-slate-500">Loading dashboard data...</div>
-          )}
+              {recentChats.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-500">
+                  No sessions yet. Start a chat to receive personalized guidance.
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-3">
+                  {recentChats.map((chatItem) => (
+                    <article key={chatItem.id} className="rounded-lg border border-slate-200 p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-50 text-indigo-600">
+                          <FaComments className="text-xs" />
+                        </span>
+                        <span className="text-xs text-slate-400">{formatRelativeDay(chatItem.updatedAt)}</span>
+                      </div>
+                      <p className="mt-3 font-semibold text-slate-900">{chatItem.title || 'Career Session'}</p>
+                      <p className="mt-2 min-h-9 text-sm text-slate-600">
+                        {chatItem.lastMessage || 'Start a new conversation with AI coach.'}
+                      </p>
+                      <p className="mt-3 text-xs text-slate-500">{chatItem.messageCount || 0} messages</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {loading && (
+              <p className="text-xs text-slate-500">Refreshing dashboard data...</p>
+            )}
+          </div>
         </main>
       </div>
     </div>

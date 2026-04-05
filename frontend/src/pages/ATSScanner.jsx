@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { FaCloudUploadAlt, FaCheckCircle, FaLightbulb, FaSync, FaSearch, FaChevronDown, FaFileAlt, FaDownload, FaTrophy, FaHistory, FaTrash, FaClock, FaChartBar, FaEye } from 'react-icons/fa'
-import { Link, useNavigate } from 'react-router-dom'
+import { FaCloudUploadAlt, FaCheckCircle, FaLightbulb, FaSync, FaSearch, FaFileAlt, FaDownload, FaTrophy, FaHistory, FaTrash, FaClock, FaChartBar, FaEye } from 'react-icons/fa'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
+import StudentProfileDropdown from '../components/StudentProfileDropdown'
 import { resumeAPI } from '../utils/api'
 
 function ATSScanner() {
@@ -438,11 +439,12 @@ function ATSScanner() {
             <h2 className="text-2xl font-bold text-gray-900">ATS Scanner</h2>
           </div>
 
-          <Link to="/profile" className="flex items-center gap-4 border-l border-gray-200 pl-6">
-            <img src={userProfile.avatar} alt={userProfile.name} className="w-9 h-9 rounded-full" />
-            <span className="text-sm font-medium text-gray-900">{userProfile.name}</span>
-            <FaChevronDown className="text-gray-400 text-xs" />
-          </Link>
+          <StudentProfileDropdown
+            name={userProfile.name}
+            email={user?.email || 'student@demo.com'}
+            avatar={userProfile.avatar}
+            className="border-l border-gray-200 pl-6"
+          />
         </header>
 
         {/* CONTENT */}

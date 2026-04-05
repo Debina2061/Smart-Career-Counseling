@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { FaRobot, FaPaperPlane, FaChevronDown, FaPlus, FaTrash, FaComments, FaHistory } from 'react-icons/fa'
-import { Link } from 'react-router-dom'
+import { FaRobot, FaPaperPlane, FaPlus, FaTrash, FaComments, FaHistory } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
+import StudentProfileDropdown from '../components/StudentProfileDropdown'
 import { chatbotAPI } from '../utils/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -234,11 +234,12 @@ function AIChatbot() {
               <FaPlus className="text-sm" />
               <span>New Chat</span>
             </button>
-            <Link to="/profile" className="flex items-center gap-4 border-l border-gray-200 pl-4">
-              <img src={userProfile.avatar} alt={userProfile.name} className="w-9 h-9 rounded-full" />
-              <span className="text-sm font-medium text-gray-900">{userProfile.name}</span>
-              <FaChevronDown className="text-gray-400 text-xs" />
-            </Link>
+            <StudentProfileDropdown
+              name={userProfile.name}
+              email={user?.email || 'student@demo.com'}
+              avatar={userProfile.avatar}
+              className="border-l border-gray-200 pl-4"
+            />
           </div>
         </header>
 
