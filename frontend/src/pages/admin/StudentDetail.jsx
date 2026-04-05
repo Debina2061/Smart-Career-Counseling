@@ -1,13 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
+import PdfImagePreview from '../../components/PdfImagePreview';
 import { adminAPI } from '../../utils/api';
 import { useAdminNotification } from '../../context/AdminNotificationContext';
+
+function buildAdminResumePdfUrl(userId, resumePdfPath) {
+  if (!userId) return null;
+
+  const token = localStorage.getItem('token');
+  const apiBase =
+    (import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : ''))
+      .replace(/\/$/, '');
+
+  const endpoint = resumePdfPath || `/admin/users/${userId}/resume/pdf`;
+  const separator = endpoint.includes('?') ? '&' : '?';
+  const query = token ? `${separator}token=${encodeURIComponent(token)}` : '';
+
+  return `${apiBase}${endpoint}${query}`;
+}
 
 function StudentDetail() {
   const { userId } = useParams();
   const [detail, setDetail] = useState(null);
   const { notify } = useAdminNotification();
+  const resumePdfUrl = buildAdminResumePdfUrl(userId, detail?.resume?.resumePdfUrl);
 
   const loadDetail = async () => {
     try {
@@ -87,15 +104,19 @@ function StudentDetail() {
                     {detail.resume.updatedAt ? new Date(detail.resume.updatedAt).toLocaleDateString() : '--'}
                   </span>
                 </div>
-                {detail.resume.resumeUrl && (
-                  <a
-                    href={detail.resume.resumeUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-teal-600"
-                  >
-                    View Resume
-                  </a>
+                {resumePdfUrl && (
+                  <div className="mt-4 space-y-3">
+                    <p className="text-sm font-semibold text-slate-700">Resume Preview (Image)</p>
+                    <PdfImagePreview pdfUrl={resumePdfUrl} maxPages={2} />
+                    <a
+                      href={resumePdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-teal-600"
+                    >
+                      Open Full Resume
+                    </a>
+                  </div>
                 )}
                 {(detail.resume.suggestions || []).length > 0 && (
                   <div className="mt-4">

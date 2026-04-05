@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  FaBars,
   FaBell,
-  FaChevronDown,
-  FaUserCog,
-  FaSignOutAlt,
   FaCheckCircle,
+  FaChevronDown,
   FaExclamationCircle,
   FaInfoCircle,
-  FaTimes,
+  FaSignOutAlt,
   FaTrash,
+  FaUserCog,
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useAdminNotification } from '../context/AdminNotificationContext';
@@ -40,7 +40,11 @@ const typeConfig = {
 };
 
 function timeAgo(date) {
-  const seconds = Math.floor((new Date() - date) / 1000);
+  if (!date) return 'Just now';
+  const timestamp = new Date(date);
+  if (Number.isNaN(timestamp.getTime())) return 'Just now';
+
+  const seconds = Math.floor((new Date() - timestamp) / 1000);
   if (seconds < 60) return 'Just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -49,19 +53,28 @@ function timeAgo(date) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function AdminLayout({ title, eyebrow, children, actions }) {
+function getInitials(name) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((segment) => segment[0]?.toUpperCase())
+    .join('');
+}
+
+function AdminLayout({ title, eyebrow, subtitle, children, actions }) {
   const { user, logout } = useAuth();
   const { notifications, unreadCount, markAllRead, clearAll } =
     useAdminNotification();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const notificationRef = useRef(null);
   const profileRef = useRef(null);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'Admin';
-  const avatarUrl =
-    user?.avatarUrl ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || 'Admin'}`;
+  const displayEmail = user?.email || 'admin@demo.com';
+  const initials = getInitials(displayName) || 'AD';
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -78,8 +91,22 @@ function AdminLayout({ title, eyebrow, children, actions }) {
         setShowProfile(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowNotifications(false);
+        setShowProfile(false);
+        setMobileSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
   const handleOpenNotifications = () => {
@@ -93,12 +120,24 @@ function AdminLayout({ title, eyebrow, children, actions }) {
   const visibleToasts = notifications.filter((n) => !n.hidden);
 
   return (
-    <div className="flex h-screen bg-[#0b1220]">
-      <AdminSidebar />
+    <div className="min-h-screen bg-[#f4f6fa] overflow-x-hidden">
+      <AdminSidebar
+        isMobileOpen={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+      />
 
-      <div className="flex-1 ml-64 flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 relative">
+      {mobileSidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+          aria-label="Close sidebar overlay"
+        />
+      )}
+
+      <div className="relative min-h-screen lg:ml-68 flex flex-col">
         {/* Toast notifications anchored to top-right near bell */}
-        <div className="fixed top-20 right-8 z-[100] flex flex-col gap-3 pointer-events-none w-96">
+        <div className="fixed top-20 right-4 sm:right-8 z-100 flex flex-col gap-3 pointer-events-none w-88 max-w-[calc(100%-2rem)]">
           {visibleToasts.slice(0, 5).map((n) => {
             const cfg = typeConfig[n.type] || typeConfig.info;
             const Icon = cfg.icon;
@@ -120,162 +159,181 @@ function AdminLayout({ title, eyebrow, children, actions }) {
           })}
         </div>
 
-        <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-slate-400">
-              {eyebrow || 'Admin'}
-            </p>
-            <h2 className="text-2xl font-bold text-slate-900 mt-0.5">
-              {title}
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {actions}
-
-            {/* Notification bell */}
-            <div className="relative" ref={notificationRef}>
+        <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
               <button
-                className="relative p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-                aria-label="Notifications"
-                onClick={handleOpenNotifications}
+                type="button"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="lg:hidden h-10 w-10 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition"
+                aria-label="Open sidebar"
               >
-                <FaBell className="text-xl" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 text-[10px] font-bold text-white bg-rose-500 rounded-full ring-2 ring-white animate-pulse">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
+                <FaBars className="mx-auto" />
               </button>
 
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-base">
-                        Notifications
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {notifications.length === 0
-                          ? 'No notifications yet'
-                          : `${notifications.length} notification${notifications.length > 1 ? 's' : ''}`}
-                      </p>
-                    </div>
-                    {notifications.length > 0 && (
-                      <button
-                        onClick={clearAll}
-                        className="text-xs font-medium text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors"
-                      >
-                        <FaTrash className="text-[10px]" />
-                        Clear all
-                      </button>
-                    )}
-                  </div>
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {notifications.length === 0 ? (
-                      <div className="px-5 py-8 text-center">
-                        <FaBell className="text-3xl text-slate-200 mx-auto mb-2" />
-                        <p className="text-sm text-slate-400">
-                          All caught up! No new notifications.
-                        </p>
-                      </div>
-                    ) : (
-                      notifications.map((n) => {
-                        const cfg = typeConfig[n.type] || typeConfig.info;
-                        const Icon = cfg.icon;
-                        return (
-                          <div
-                            key={n.id}
-                            className={`px-5 py-3.5 flex items-start gap-3 hover:bg-slate-50/80 transition-colors ${
-                              !n.read ? 'bg-slate-50/40' : ''
-                            }`}
-                          >
-                            <span
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                                n.type === 'error'
-                                  ? 'bg-rose-100'
-                                  : n.type === 'success'
-                                  ? 'bg-emerald-100'
-                                  : 'bg-blue-100'
-                              }`}
-                            >
-                              <Icon
-                                className={`text-sm ${cfg.iconColor}`}
-                              />
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-slate-800 font-medium leading-snug">
-                                {n.message}
-                              </p>
-                              <p className="text-[11px] text-slate-400 mt-1">
-                                {timeAgo(n.time)}
-                              </p>
-                            </div>
-                            {!n.read && (
-                              <span className="w-2 h-2 rounded-full bg-teal-500 mt-2 shrink-0" />
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-slate-400">
+                  {eyebrow || 'Overview'}
+                </p>
+                <h2 className="text-3xl font-bold text-slate-900 leading-tight truncate">
+                  {title}
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {subtitle || 'Monitor platform performance and user activity'}
+                </p>
+              </div>
             </div>
 
-            {/* Divider */}
-            <div className="w-px h-10 bg-slate-200" />
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {actions}
 
-            {/* Profile dropdown */}
-            <div className="relative" ref={profileRef}>
-              <button
-                onClick={() => setShowProfile((prev) => !prev)}
-                className="flex items-center gap-3 pl-2 hover:bg-slate-50 rounded-xl py-1.5 pr-3 transition-colors"
-              >
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-900 leading-tight">
-                    {displayName}
-                  </p>
-                  <p className="text-[11px] text-slate-400">Administrator</p>
-                </div>
-                <img
-                  src={avatarUrl}
-                  alt={displayName}
-                  className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-100"
-                />
-                <FaChevronDown className="text-slate-400 text-xs" />
-              </button>
-              {showProfile && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                    <p className="text-sm font-semibold text-slate-900">
+              <div className="relative" ref={notificationRef}>
+                <button
+                  type="button"
+                  className="relative h-10 w-10 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition"
+                  aria-label="Notifications"
+                  onClick={handleOpenNotifications}
+                >
+                  <FaBell className="mx-auto text-base" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 flex items-center justify-center px-1 text-[10px] font-bold text-white bg-rose-500 rounded-full ring-2 ring-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-[20rem] sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-base">
+                          Notifications
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {notifications.length === 0
+                            ? 'No notifications yet'
+                            : `${notifications.length} notification${notifications.length > 1 ? 's' : ''}`}
+                        </p>
+                      </div>
+                      {notifications.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={clearAll}
+                          className="text-xs font-medium text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors"
+                        >
+                          <FaTrash className="text-[10px]" />
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                      {notifications.length === 0 ? (
+                        <div className="px-5 py-8 text-center">
+                          <FaBell className="text-3xl text-slate-200 mx-auto mb-2" />
+                          <p className="text-sm text-slate-400">
+                            All caught up! No new notifications.
+                          </p>
+                        </div>
+                      ) : (
+                        notifications.map((n) => {
+                          const cfg = typeConfig[n.type] || typeConfig.info;
+                          const Icon = cfg.icon;
+
+                          return (
+                            <div
+                              key={n.id}
+                              className={`px-5 py-3.5 flex items-start gap-3 hover:bg-slate-50/80 transition-colors ${
+                                !n.read ? 'bg-slate-50/40' : ''
+                              }`}
+                            >
+                              <span
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                                  n.type === 'error'
+                                    ? 'bg-rose-100'
+                                    : n.type === 'success'
+                                    ? 'bg-emerald-100'
+                                    : 'bg-blue-100'
+                                }`}
+                              >
+                                <Icon className={`text-sm ${cfg.iconColor}`} />
+                              </span>
+
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-slate-800 font-medium leading-snug">
+                                  {n.message}
+                                </p>
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                  {timeAgo(n.time)}
+                                </p>
+                              </div>
+
+                              {!n.read && (
+                                <span className="w-2 h-2 rounded-full bg-teal-500 mt-2 shrink-0" />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="relative" ref={profileRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowProfile((prev) => !prev)}
+                  className="flex items-center gap-2 sm:gap-3 rounded-xl border border-slate-200 pl-2 pr-2.5 py-1.5 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="hidden sm:block text-right">
+                    <p className="text-sm font-semibold text-slate-900 leading-tight truncate max-w-36">
                       {displayName}
                     </p>
-                    <p className="text-xs text-slate-400 truncate">
-                      {user?.email}
+                    <p className="text-[11px] text-slate-500 truncate max-w-36">
+                      {displayEmail}
                     </p>
                   </div>
-                  <Link
-                    to="/admin/profile"
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors font-medium"
-                  >
-                    <FaUserCog className="text-slate-400" />
-                    Profile & Settings
-                  </Link>
-                  <button
-                    onClick={logout}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-rose-600 hover:bg-rose-50 transition-colors font-medium"
-                  >
-                    <FaSignOutAlt />
-                    Logout
-                  </button>
-                </div>
-              )}
+
+                  <span className="h-10 w-10 rounded-full bg-slate-800 text-white text-sm font-bold flex items-center justify-center">
+                    {initials}
+                  </span>
+                  <FaChevronDown className="hidden sm:block text-slate-400 text-xs" />
+                </button>
+
+                {showProfile && (
+                  <div className="absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {displayName}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate">
+                        {displayEmail}
+                      </p>
+                    </div>
+                    <Link
+                      to="/admin/profile"
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors font-medium"
+                    >
+                      <FaUserCog className="text-slate-400" />
+                      Profile & Settings
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-rose-600 hover:bg-rose-50 transition-colors font-medium"
+                    >
+                      <FaSignOutAlt />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="admin-scope flex-1 overflow-y-auto p-8">
+        <main className="admin-scope flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>
