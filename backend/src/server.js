@@ -105,7 +105,7 @@ app.use((err, req, res, next) => {
 });
 
 // Dev convenience: redirect browser frontend routes accidentally opened on backend port
-app.get("*", (req, res, next) => {
+app.get(/.*/, (req, res, next) => {
     const acceptsHtml = (req.headers.accept || "").includes("text/html");
     const isApiRoute = ["/auth", "/user", "/job", "/recommendation", "/chat", "/admin", "/api", "/health"].some((prefix) => req.path.startsWith(prefix));
 
