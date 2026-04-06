@@ -4,7 +4,7 @@ import { generateToken } from "../utils/generateToken.js";
 import { Decryption, Encryption } from "../utils/encrypt.js";
 import crypto from "crypto";
 import { envConfig } from "../Config/envConfig.js";
-import { SendMail } from "../utils/nodemailer.js";
+import { sendEmail } from "../utils/sendEmail.js";
 import { uploadImageBuffer } from "../utils/cloudinary.js";
 import { Profile } from "../Model/profile.model.js";
 import jwt from "jsonwebtoken";
@@ -33,21 +33,27 @@ const createEmailOtp = async (email, purpose) => {
 const sendVerificationEmail = async (user) => {
   const otp = await createEmailOtp(user.email, "verify");
   const htmlContent = verifyEmail(user.email, otp);
-  await SendMail({
-    email: user.email,
+  const result = await sendEmail({
+    to: user.email,
     subject: "Verify your email — OTP Code",
     html: htmlContent,
   });
+  if (!result.success) {
+    throw new Error(result.error?.message || "Failed to send verification email");
+  }
 };
 
 const sendResetPasswordEmail = async (user) => {
   const otp = await createEmailOtp(user.email, "reset");
   const htmlContent = resetPasswordEmail(user.email, otp);
-  await SendMail({
-    email: user.email,
+  const result = await sendEmail({
+    to: user.email,
     subject: "Password Reset — OTP Code",
     html: htmlContent,
   });
+  if (!result.success) {
+    throw new Error(result.error?.message || "Failed to send password reset email");
+  }
 };
 
 export const SignUp = async (req, res) => {
